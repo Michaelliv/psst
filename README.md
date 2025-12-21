@@ -72,27 +72,27 @@ That's it. Your agent can now use secrets without ever knowing what they are.
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Agent Context                                              │
-│                                                             │
-│  "I need to call Stripe API"                                │
-│  > psst STRIPE_KEY -- curl https://api.stripe.com          │
-│                                                             │
-│  [Command executed, exit code 0]                            │
-│                                                             │
-│  (Agent never sees sk_live_...)                             │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  psst                                                       │
-│                                                             │
-│  1. Retrieve encryption key from OS Keychain                │
-│  2. Decrypt STRIPE_KEY from local vault                     │
-│  3. Inject into subprocess environment                      │
-│  4. Execute: curl ... (with $STRIPE_KEY expanded)           │
-│  5. Return exit code to agent                               │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│  Agent Context                                        │
+│                                                       │
+│  "I need to call Stripe API"                          │
+│  > psst STRIPE_KEY -- curl https://api.stripe.com    │
+│                                                       │
+│  [Command executed, exit code 0]                      │
+│                                                       │
+│  (Agent never sees sk_live_...)                       │
+└───────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌───────────────────────────────────────────────────────┐
+│  psst                                                 │
+│                                                       │
+│  1. Retrieve encryption key from OS Keychain          │
+│  2. Decrypt STRIPE_KEY from local vault               │
+│  3. Inject into subprocess environment                │
+│  4. Execute: curl ... (with $STRIPE_KEY expanded)     │
+│  5. Return exit code to agent                         │
+└───────────────────────────────────────────────────────┘
 ```
 
 **Security model:**
