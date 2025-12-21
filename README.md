@@ -53,7 +53,7 @@ The secret never touches the agent's context. It's injected into the subprocess 
 
 ```bash
 # Install
-npm install -g psst-cli
+npm install -g @pssst/cli
 
 # Initialize (one-time, stores encryption key in your OS keychain)
 psst init
