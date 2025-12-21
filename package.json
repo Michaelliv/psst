@@ -1,5 +1,5 @@
 {
-  "name": "@psst/cli",
+  "name": "psst-cli",
   "version": "0.1.0",
   "description": "AI-native secrets manager. Agents use secrets without seeing them.",
   "module": "src/main.ts",
@@ -7,6 +7,9 @@
   "bin": {
     "psst": "./src/main.ts"
   },
+  "files": [
+    "src"
+  ],
   "scripts": {
     "dev": "bun run src/main.ts",
     "build": "bun build --compile src/main.ts --outfile psst",
@@ -14,12 +17,32 @@
     "build:mac-arm": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile psst-darwin-arm64",
     "build:mac-x64": "bun build --compile --target=bun-darwin-x64 src/main.ts --outfile psst-darwin-x64"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Michaelliv/psst.git"
+  },
+  "homepage": "https://github.com/Michaelliv/psst#readme",
+  "bugs": {
+    "url": "https://github.com/Michaelliv/psst/issues"
+  },
   "devDependencies": {
     "bun-types": "latest"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
-  "keywords": ["secrets", "cli", "agent", "ai", "security"],
+  "keywords": [
+    "secrets",
+    "cli",
+    "agent",
+    "ai",
+    "security",
+    "keychain",
+    "encryption",
+    "secrets-management",
+    "claude",
+    "cursor",
+    "aider"
+  ],
   "license": "MIT"
 }
