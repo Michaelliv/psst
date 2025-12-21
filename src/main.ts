@@ -6,12 +6,14 @@ import { get } from "./commands/get";
 import { list } from "./commands/list";
 import { rm } from "./commands/rm";
 import { exec } from "./commands/exec";
+import { onboard } from "./commands/onboard";
 
 const HELP = `
 psst - AI-native secrets manager
 
 VAULT MANAGEMENT
   psst init                     Create vault (~/.psst or .psst/)
+  psst onboard                  Add psst instructions to CLAUDE.md/AGENTS.md
   psst lock                     Lock vault
   psst unlock                   Unlock vault
 
@@ -62,6 +64,10 @@ async function main() {
   switch (command) {
     case "init":
       await init(args.slice(1));
+      break;
+
+    case "onboard":
+      await onboard();
       break;
 
     case "set":

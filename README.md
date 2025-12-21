@@ -49,23 +49,102 @@ The secret never touches the agent's context. It's injected into the subprocess 
 
 ---
 
-## Quick Start
+## For Humans
+
+You set up psst once. Then your agent handles the rest.
+
+### Installation
 
 ```bash
-# Install
 npm install -g @pssst/cli
-
-# Initialize (one-time, stores encryption key in your OS keychain)
-psst init
-
-# Add a secret (interactive prompt, value never shown)
-psst set STRIPE_KEY
-
-# Use it (zero friction, no password needed)
-psst STRIPE_KEY -- curl https://api.stripe.com/v1/charges
 ```
 
-That's it. Your agent can now use secrets without ever knowing what they are.
+### Setup (one-time)
+
+```bash
+# Create vault (stores encryption key in your OS keychain)
+psst init
+
+# Add your secrets
+psst set STRIPE_KEY          # Interactive prompt, value hidden
+psst set OPENAI_API_KEY
+psst set DATABASE_URL
+
+# Verify
+psst list
+```
+
+That's it. Now tell your agent:
+
+```bash
+psst onboard     # Adds instructions to CLAUDE.md or AGENTS.md
+```
+
+### Managing Secrets
+
+```bash
+psst set <NAME>               # Add/update secret (interactive)
+psst set <NAME> --stdin       # Pipe value in (for scripts)
+psst get <NAME>               # View value (debugging only)
+psst list                     # List all secret names
+psst list --json              # JSON output (names only)
+psst rm <NAME>                # Delete secret
+```
+
+### Project-Local Vaults
+
+```bash
+psst init --local             # Creates .psst/ in current directory
+```
+
+Local vaults take precedence over the global `~/.psst/` vault.
+
+---
+
+## For Agents
+
+**You don't read secrets. You use them.**
+
+### The Pattern
+
+```bash
+psst <SECRET_NAME> -- <command>
+```
+
+This injects `SECRET_NAME` into the command's environment. You never see the value.
+
+### Examples
+
+```bash
+# Single secret
+psst STRIPE_KEY -- curl -H "Authorization: Bearer $STRIPE_KEY" https://api.stripe.com
+
+# Multiple secrets
+psst AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY -- aws s3 ls
+
+# Any command that reads from environment
+psst DATABASE_URL -- prisma migrate deploy
+psst OPENAI_API_KEY -- python my_script.py
+psst DOCKER_TOKEN -- docker login -u me --password $DOCKER_TOKEN
+```
+
+### What You Get Back
+
+- Exit code of the command
+- stdout/stderr of the command
+- **Not** the secret value
+
+### Checking Available Secrets
+
+```bash
+psst list                     # See what's available
+psst list --json              # Structured output
+```
+
+### If a Secret is Missing
+
+Ask the human to add it:
+> "I need `STRIPE_KEY` to call the Stripe API. Please run `psst set STRIPE_KEY` to add it."
 
 ---
 
@@ -103,66 +182,13 @@ That's it. Your agent can now use secrets without ever knowing what they are.
 
 ---
 
-## CLI Reference
+## CI / Headless Environments
 
-```bash
-# Vault
-psst init                     # Create vault, store key in keychain
-psst init --local             # Create project-local vault (.psst/)
+When keychain isn't available, use the `PSST_PASSWORD` environment variable:
 
-# Secrets (human operations)
-psst set <NAME>               # Set secret (interactive prompt)
-psst set <NAME> --stdin       # Set from stdin (for automation)
-psst get <NAME>               # Get value (human debugging only)
-psst list                     # List secret names
-psst list --json              # JSON output (names only, never values)
-psst rm <NAME>                # Remove secret
-
-# Execution (agent-friendly)
-psst <NAME> -- <command>      # Run command with secret in env
-psst A B C -- <command>       # Multiple secrets
-```
-
----
-
-## Examples
-
-```bash
-# AWS
-psst AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY -- aws s3 ls
-
-# OpenAI
-psst OPENAI_API_KEY -- python my_script.py
-
-# Database
-psst DATABASE_URL -- prisma migrate deploy
-
-# Multiple services
-psst STRIPE_KEY SENDGRID_KEY -- node checkout.js
-
-# Docker
-psst DOCKER_TOKEN -- docker login -u me --password $DOCKER_TOKEN
-```
-
----
-
-## Agent Integration
-
-### Claude Code / Cursor / Aider
-
-Just use it. The agent writes:
-```bash
-psst API_KEY -- ./deploy.sh
-```
-
-And it works. No configuration needed.
-
-### CI / Headless Environments
-
-When keychain isn't available:
 ```bash
 export PSST_PASSWORD="your-master-password"
-psst STRIPE_KEY -- ./script.sh
+psst STRIPE_KEY -- ./deploy.sh
 ```
 
 ---
