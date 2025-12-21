@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>psst – AI-native secrets manager</title>
+  <meta name="description" content="Because your agent doesn't need to know your secrets. Use secrets without seeing them.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤫</text></svg>">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 600px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 4rem;
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 400;
+      margin-bottom: 1rem;
+      color: #fff;
+    }
+
+    .tagline {
+      font-size: 1.2rem;
+      color: #888;
+      margin-bottom: 3rem;
+    }
+
+    .install {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .install code {
+      color: #4ade80;
+      font-size: 1rem;
+    }
+
+    .install button {
+      background: #333;
+      border: none;
+      color: #888;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+
+    .install button:hover {
+      background: #444;
+      color: #fff;
+    }
+
+    .install button.copied {
+      color: #4ade80;
+    }
+
+    .example {
+      background: #111;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 3rem;
+      text-align: left;
+    }
+
+    .example .comment {
+      color: #666;
+    }
+
+    .example .command {
+      color: #4ade80;
+      margin: 0.5rem 0;
+    }
+
+    .example .output {
+      color: #888;
+      font-style: italic;
+    }
+
+    .features {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 3rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .feature {
+      text-align: center;
+    }
+
+    .feature-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-text {
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .links {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+    }
+
+    .links a {
+      color: #888;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border: 1px solid #333;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .links a:hover {
+      color: #fff;
+      border-color: #555;
+    }
+
+    @media (max-width: 500px) {
+      h1 {
+        font-size: 2rem;
+      }
+
+      .tagline {
+        font-size: 1rem;
+      }
+
+      .install {
+        flex-direction: column;
+      }
+
+      .features {
+        flex-direction: column;
+        gap: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🤫</div>
+    <h1>psst</h1>
+    <p class="tagline">Because your agent doesn't need to know your secrets.</p>
+
+    <div class="install">
+      <code id="install-cmd">npm install -g @pssst/cli</code>
+      <button onclick="copyInstall()">copy</button>
+    </div>
+
+    <div class="example">
+      <div class="comment"># Your agent runs this:</div>
+      <div class="command">psst STRIPE_KEY -- curl https://api.stripe.com</div>
+      <div class="output">Secret injected. Agent never sees it.</div>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🔐</div>
+        <div class="feature-text">Encrypted at rest</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔑</div>
+        <div class="feature-text">OS keychain</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🚫</div>
+        <div class="feature-text">Zero friction</div>
+      </div>
+    </div>
+
+    <div class="links">
+      <a href="https://github.com/Michaelliv/psst">GitHub</a>
+      <a href="https://www.npmjs.com/package/@pssst/cli">npm</a>
+    </div>
+  </div>
+
+  <script>
+    function copyInstall() {
+      const cmd = document.getElementById('install-cmd').textContent;
+      navigator.clipboard.writeText(cmd);
+      const btn = document.querySelector('.install button');
+      btn.textContent = 'copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    }
+  </script>
+</body>
+</html>

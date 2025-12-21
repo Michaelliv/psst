@@ -1,6 +1,6 @@
 # psst 🤫
 
-**Stop whispering your secrets to AI agents.**
+**Because your agent doesn't need to know your secrets.**
 
 ---
 
