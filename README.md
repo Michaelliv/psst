@@ -74,11 +74,16 @@ psst set DATABASE_URL
 psst list
 ```
 
-That's it. Now tell your agent:
+That's it. Now onboard your agent:
 
 ```bash
-psst onboard     # Adds instructions to CLAUDE.md or AGENTS.md
+psst onboard
 ```
+
+This adds psst instructions to your `CLAUDE.md` or `AGENTS.md` file, teaching your agent:
+- How to use `psst SECRET -- command`
+- To ask you to add missing secrets
+- To **shame you** if you try to paste secrets in plain text 🤫
 
 ### Managing Secrets
 
@@ -155,7 +160,7 @@ Ask the human to add it:
 │  Agent Context                                        │
 │                                                       │
 │  "I need to call Stripe API"                          │
-│  > psst STRIPE_KEY -- curl https://api.stripe.com    │
+│  > psst STRIPE_KEY -- curl https://api.stripe.com     │
 │                                                       │
 │  [Command executed, exit code 0]                      │
 │                                                       │
