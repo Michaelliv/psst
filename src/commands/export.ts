@@ -1,16 +1,21 @@
+import chalk from "chalk";
 import { getUnlockedVault } from "./common";
+import type { OutputOptions } from "../utils/output";
 
-interface ExportOptions {
+interface ExportOptions extends OutputOptions {
   envFile?: string;
 }
 
-export async function exportSecrets(options: ExportOptions): Promise<void> {
+export async function exportSecrets(options: ExportOptions = {}): Promise<void> {
   const vault = await getUnlockedVault();
-
   const secrets = vault.listSecrets();
 
   if (secrets.length === 0) {
-    console.error("No secrets to export");
+    if (options.json) {
+      console.log(JSON.stringify({ success: true, exported: 0 }));
+    } else if (!options.quiet) {
+      console.log(chalk.dim("No secrets to export"));
+    }
     vault.close();
     return;
   }
@@ -20,7 +25,6 @@ export async function exportSecrets(options: ExportOptions): Promise<void> {
   for (const secret of secrets) {
     const value = await vault.getSecret(secret.name);
     if (value !== null) {
-      // Escape special characters and wrap in quotes if needed
       const escapedValue = escapeEnvValue(value);
       lines.push(`${secret.name}=${escapedValue}`);
     }
@@ -31,17 +35,25 @@ export async function exportSecrets(options: ExportOptions): Promise<void> {
   const content = lines.join("\n") + "\n";
 
   if (options.envFile) {
-    // Write to file
     await Bun.write(options.envFile, content);
-    console.error(`Exported ${secrets.length} secret(s) to ${options.envFile}`);
+
+    if (options.json) {
+      console.log(JSON.stringify({ success: true, exported: secrets.length, file: options.envFile }));
+    } else if (!options.quiet) {
+      console.log(chalk.green("✓"), `Exported ${chalk.bold(secrets.length)} secret(s) to ${chalk.dim(options.envFile)}`);
+    }
   } else {
-    // Write to stdout
+    // Write to stdout - no decoration
     process.stdout.write(content);
+
+    if (options.json) {
+      // JSON mode with stdout export doesn't make sense, but handle it
+      console.error(JSON.stringify({ success: true, exported: secrets.length }));
+    }
   }
 }
 
 function escapeEnvValue(value: string): string {
-  // If value contains special characters, wrap in double quotes and escape
   if (
     value.includes(" ") ||
     value.includes('"') ||
@@ -51,7 +63,6 @@ function escapeEnvValue(value: string): string {
     value.includes("`") ||
     value.includes("\\")
   ) {
-    // Escape backslashes, double quotes, and newlines
     const escaped = value
       .replace(/\\/g, "\\\\")
       .replace(/"/g, '\\"')

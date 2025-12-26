@@ -1,16 +1,27 @@
+import chalk from "chalk";
 import { getUnlockedVault } from "./common";
+import { EXIT_USER_ERROR } from "../utils/exit-codes";
+import type { OutputOptions } from "../utils/output";
 
-export async function set(name: string, fromStdin: boolean): Promise<void> {
+interface SetOptions extends OutputOptions {
+  stdin?: boolean;
+}
+
+export async function set(name: string, options: SetOptions = {}): Promise<void> {
   // Validate secret name
   if (!/^[A-Z][A-Z0-9_]*$/.test(name)) {
-    console.error("Error: Secret name must be uppercase with underscores (e.g., STRIPE_KEY)");
-    process.exit(1);
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: "invalid_name", name }));
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), "Invalid name format");
+      console.log(chalk.dim("  Must be uppercase with underscores (e.g., STRIPE_KEY)"));
+    }
+    process.exit(EXIT_USER_ERROR);
   }
 
   let value: string;
 
-  if (fromStdin) {
-    // Read stdin via stream
+  if (options.stdin) {
     const reader = Bun.stdin.stream().getReader();
     const chunks: Uint8Array[] = [];
     while (true) {
@@ -20,28 +31,34 @@ export async function set(name: string, fromStdin: boolean): Promise<void> {
     }
     value = new TextDecoder().decode(Buffer.concat(chunks)).trim();
   } else {
-    // Interactive prompt (hide input)
-    process.stdout.write(`Enter value for ${name}: `);
+    process.stdout.write(`Enter value for ${chalk.bold(name)}: `);
     value = await readSecretValue();
   }
 
   if (!value) {
-    console.error("Error: Empty value not allowed");
-    process.exit(1);
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: "empty_value", name }));
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), "Empty value not allowed");
+    }
+    process.exit(EXIT_USER_ERROR);
   }
 
   const vault = await getUnlockedVault();
   await vault.setSecret(name, value);
   vault.close();
 
-  console.log(`Secret '${name}' saved`);
+  if (options.json) {
+    console.log(JSON.stringify({ success: true, name }));
+  } else if (!options.quiet) {
+    console.log(chalk.green("✓"), `Secret ${chalk.bold(name)} saved`);
+  }
 }
 
 async function readSecretValue(): Promise<string> {
   const { spawnSync } = await import("child_process");
 
   if (!process.stdin.isTTY) {
-    // Not a terminal, read from pipe
     const reader = Bun.stdin.stream().getReader();
     const chunks: Uint8Array[] = [];
     while (true) {
@@ -52,7 +69,6 @@ async function readSecretValue(): Promise<string> {
     return new TextDecoder().decode(Buffer.concat(chunks)).trim();
   }
 
-  // Disable echo for password input
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
 
   let input = "";

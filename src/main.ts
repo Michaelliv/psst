@@ -19,7 +19,7 @@ psst - AI-native secrets manager
 VAULT MANAGEMENT
   psst init                     Create vault (~/.psst or .psst/)
   psst onboard                  Add psst instructions to CLAUDE.md/AGENTS.md
-  psst lock                     Lock vault
+  psst lock                     Lock vault (encrypt at rest)
   psst unlock                   Unlock vault
 
 SECRET MANAGEMENT
@@ -27,7 +27,6 @@ SECRET MANAGEMENT
   psst set <NAME> --stdin       Set secret from stdin
   psst get <NAME>               Get secret value (human debugging)
   psst list                     List secret names
-  psst list --json              List as JSON (names only, no values)
   psst rm <NAME>                Remove secret
 
 IMPORT/EXPORT
@@ -41,6 +40,10 @@ AGENT EXECUTION
   psst <NAME> [NAME...] -- <cmd>   Inject secrets and run command
   psst --no-mask <NAME> -- <cmd>   Disable output masking (for debugging)
 
+GLOBAL FLAGS
+  --json                        Output as JSON
+  -q, --quiet                   Suppress output, use exit codes
+
 EXAMPLES
   psst set STRIPE_KEY
   psst list
@@ -51,26 +54,38 @@ EXAMPLES
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
-    console.log(HELP);
+  // Parse global flags
+  const json = args.includes("--json");
+  const quiet = args.includes("--quiet") || args.includes("-q");
+  const options = { json, quiet };
+
+  // Remove global flags from args for command processing
+  const cleanArgs = args.filter(a => a !== "--json" && a !== "--quiet" && a !== "-q");
+
+  if (cleanArgs.length === 0 || cleanArgs[0] === "--help" || cleanArgs[0] === "-h") {
+    if (!quiet) console.log(HELP);
     process.exit(0);
   }
 
-  if (args[0] === "--version" || args[0] === "-v") {
-    console.log(`psst ${version}`);
+  if (cleanArgs[0] === "--version" || cleanArgs[0] === "-v") {
+    if (json) {
+      console.log(JSON.stringify({ version }));
+    } else if (!quiet) {
+      console.log(`psst ${version}`);
+    }
     process.exit(0);
   }
 
-  const command = args[0];
+  const command = cleanArgs[0];
 
   // Check if this is the exec pattern: psst SECRET [SECRET...] -- cmd
-  const dashDashIndex = args.indexOf("--");
+  const dashDashIndex = cleanArgs.indexOf("--");
   if (dashDashIndex > 0) {
-    const noMask = args.includes("--no-mask");
-    const secretNames = args
+    const noMask = cleanArgs.includes("--no-mask");
+    const secretNames = cleanArgs
       .slice(0, dashDashIndex)
       .filter((a) => a !== "--no-mask");
-    const cmdArgs = args.slice(dashDashIndex + 1);
+    const cmdArgs = cleanArgs.slice(dashDashIndex + 1);
 
     if (cmdArgs.length === 0) {
       console.error("Error: No command specified after --");
@@ -84,80 +99,95 @@ async function main() {
   // Standard commands
   switch (command) {
     case "init":
-      await init(args.slice(1));
+      await init(cleanArgs.slice(1), options);
       break;
 
     case "onboard":
-      await onboard();
+      await onboard(options);
       break;
 
     case "set":
-      if (!args[1]) {
-        console.error("Error: Secret name required");
-        console.error("Usage: psst set <NAME>");
+      if (!cleanArgs[1]) {
+        if (json) {
+          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+        } else if (!quiet) {
+          console.error("Error: Secret name required");
+          console.error("Usage: psst set <NAME>");
+        }
         process.exit(1);
       }
-      await set(args[1], args.includes("--stdin"));
+      await set(cleanArgs[1], { ...options, stdin: cleanArgs.includes("--stdin") });
       break;
 
     case "get":
-      if (!args[1]) {
-        console.error("Error: Secret name required");
-        console.error("Usage: psst get <NAME>");
+      if (!cleanArgs[1]) {
+        if (json) {
+          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+        } else if (!quiet) {
+          console.error("Error: Secret name required");
+          console.error("Usage: psst get <NAME>");
+        }
         process.exit(1);
       }
-      await get(args[1]);
+      await get(cleanArgs[1], options);
       break;
 
     case "list":
-      await list(args.includes("--json"));
+      await list(options);
       break;
 
     case "rm":
     case "remove":
     case "delete":
-      if (!args[1]) {
-        console.error("Error: Secret name required");
-        console.error("Usage: psst rm <NAME>");
+      if (!cleanArgs[1]) {
+        if (json) {
+          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+        } else if (!quiet) {
+          console.error("Error: Secret name required");
+          console.error("Usage: psst rm <NAME>");
+        }
         process.exit(1);
       }
-      await rm(args[1]);
+      await rm(cleanArgs[1], options);
       break;
 
     case "import": {
-      const fromStdin = args.includes("--stdin");
-      const fromEnv = args.includes("--from-env");
-      const patternIndex = args.indexOf("--pattern");
-      const pattern = patternIndex !== -1 ? args[patternIndex + 1] : undefined;
+      const fromStdin = cleanArgs.includes("--stdin");
+      const fromEnv = cleanArgs.includes("--from-env");
+      const patternIndex = cleanArgs.indexOf("--pattern");
+      const pattern = patternIndex !== -1 ? cleanArgs[patternIndex + 1] : undefined;
 
-      // Get remaining args (file path)
-      const fileArgs = args.slice(1).filter(
+      const fileArgs = cleanArgs.slice(1).filter(
         (a) => !a.startsWith("--") && a !== pattern
       );
 
-      await importSecrets(fileArgs, { stdin: fromStdin, fromEnv, pattern });
+      await importSecrets(fileArgs, { ...options, stdin: fromStdin, fromEnv, pattern });
       break;
     }
 
     case "export": {
-      const envFileIndex = args.indexOf("--env-file");
-      const envFile = envFileIndex !== -1 ? args[envFileIndex + 1] : undefined;
+      const envFileIndex = cleanArgs.indexOf("--env-file");
+      const envFile = envFileIndex !== -1 ? cleanArgs[envFileIndex + 1] : undefined;
 
-      await exportSecrets({ envFile });
+      await exportSecrets({ ...options, envFile });
       break;
     }
 
     case "lock":
-      await lock();
+      await lock(options);
       break;
 
     case "unlock":
-      await unlock();
+      await unlock(options);
       break;
 
     default:
-      console.error(`Unknown command: ${command}`);
-      console.log(HELP);
+      if (json) {
+        console.log(JSON.stringify({ success: false, error: "unknown_command", command }));
+      } else {
+        console.error(`Unknown command: ${command}`);
+        console.log(HELP);
+      }
       process.exit(1);
   }
 }

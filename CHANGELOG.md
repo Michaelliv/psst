@@ -6,6 +6,7 @@
 - Fallback to environment variables when secret not in vault (#3)
 - Mask/redact secrets in command output (#4)
 - Implement lock/unlock for vault encryption at rest (#5)
+- DX improvements: colored output, spinners, `--json` and `--quiet` flags
 
 ## 0.1.2
 - Initial public release

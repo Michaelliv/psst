@@ -1,18 +1,27 @@
+import chalk from "chalk";
+import ora from "ora";
 import { existsSync, unlinkSync } from "fs";
 import { join } from "path";
 import { Vault } from "../vault/vault";
 import { encryptFile } from "../vault/crypto";
 import { deleteKey } from "../vault/keychain";
+import { EXIT_USER_ERROR, EXIT_LOCKED, EXIT_NO_VAULT, EXIT_ERROR } from "../utils/exit-codes";
+import type { OutputOptions } from "../utils/output";
 
 const DB_NAME = "vault.db";
 const LOCKED_NAME = "vault.db.locked";
 
-export async function lock(): Promise<void> {
+export async function lock(options: OutputOptions = {}): Promise<void> {
   const vaultPath = Vault.findVaultPath();
 
   if (!vaultPath) {
-    console.error("No vault found. Run 'psst init' first.");
-    process.exit(1);
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: "no_vault" }));
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), "No vault found");
+      console.log(chalk.dim("  Run: psst init"));
+    }
+    process.exit(EXIT_NO_VAULT);
   }
 
   const dbPath = join(vaultPath, DB_NAME);
@@ -20,52 +29,71 @@ export async function lock(): Promise<void> {
 
   if (!existsSync(dbPath)) {
     if (existsSync(lockedPath)) {
-      console.log("Vault is already locked.");
-      return;
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: "already_locked" }));
+      } else if (!options.quiet) {
+        console.log(chalk.yellow("⚠"), "Vault is already locked");
+      }
+      process.exit(EXIT_LOCKED);
     }
-    console.error("Vault database not found.");
-    process.exit(1);
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: "no_vault" }));
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), "Vault database not found");
+    }
+    process.exit(EXIT_NO_VAULT);
   }
 
-  // Get password
-  const password = await getPassword();
+  const password = await getPassword("lock", options);
   if (!password) {
-    console.error("Error: Password required to lock vault");
-    process.exit(1);
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: "no_password" }));
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), "Password required");
+    }
+    process.exit(EXIT_USER_ERROR);
   }
 
-  // Read vault database
-  const dbData = await Bun.file(dbPath).arrayBuffer();
+  const useSpinner = !options.json && !options.quiet;
+  const spinner = useSpinner ? ora("Encrypting vault...").start() : null;
 
-  // Encrypt it
-  const encrypted = await encryptFile(Buffer.from(dbData), password);
+  try {
+    const dbData = await Bun.file(dbPath).arrayBuffer();
+    const encrypted = await encryptFile(Buffer.from(dbData), password);
+    await Bun.write(lockedPath, encrypted);
+    unlinkSync(dbPath);
+    await deleteKey();
 
-  // Write encrypted file
-  await Bun.write(lockedPath, encrypted);
-
-  // Delete unencrypted database
-  unlinkSync(dbPath);
-
-  // Remove key from keychain
-  await deleteKey();
-
-  console.log("Vault locked.");
+    if (options.json) {
+      console.log(JSON.stringify({ success: true }));
+    } else {
+      spinner?.succeed("Vault locked");
+    }
+  } catch (err: any) {
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: err.message }));
+    } else {
+      spinner?.fail("Failed to lock vault");
+      if (!options.quiet) {
+        console.error(chalk.dim(`  ${err.message}`));
+      }
+    }
+    process.exit(EXIT_ERROR);
+  }
 }
 
-async function getPassword(): Promise<string | null> {
-  // Check env var first
+async function getPassword(action: string, options: OutputOptions): Promise<string | null> {
   if (process.env.PSST_PASSWORD) {
     return process.env.PSST_PASSWORD;
   }
 
-  // Interactive prompt
-  if (!process.stdin.isTTY) {
+  if (!process.stdin.isTTY || options.quiet || options.json) {
     return null;
   }
 
   const { spawnSync } = await import("child_process");
 
-  process.stdout.write("Enter lock password: ");
+  process.stdout.write(`Enter ${action} password: `);
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
 
   let input = "";

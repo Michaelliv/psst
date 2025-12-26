@@ -1,5 +1,8 @@
+import chalk from "chalk";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+import { EXIT_USER_ERROR } from "../utils/exit-codes";
+import type { OutputOptions } from "../utils/output";
 
 const PSST_INSTRUCTIONS = `
 ## Secrets Management (psst)
@@ -38,7 +41,7 @@ Ask the user to add it:
 
 If the user pastes a raw API key, password, or secret into the chat, gently shame them:
 
-> "🤫 Whoa there! You just pasted a secret in plain text. That's now in your chat history, possibly in logs, and who knows where else.
+> "Whoa there! You just pasted a secret in plain text. That's now in your chat history, possibly in logs, and who knows where else.
 >
 > Let's fix that. Run:
 > \`\`\`
@@ -51,10 +54,9 @@ Then remind them about the Hall of Shame: https://github.com/Michaelliv/psst#the
 
 const MARKER = "## Secrets Management (psst)";
 
-export async function onboard(): Promise<void> {
+export async function onboard(options: OutputOptions = {}): Promise<void> {
   const cwd = process.cwd();
 
-  // Check for CLAUDE.md or AGENTS.md
   const claudeMd = join(cwd, "CLAUDE.md");
   const agentsMd = join(cwd, "AGENTS.md");
 
@@ -71,20 +73,29 @@ export async function onboard(): Promise<void> {
 
   // Check if already onboarded
   if (existingContent.includes(MARKER)) {
-    console.log("Already onboarded! psst instructions found in", targetFile);
-    return;
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: "already_onboarded", file: targetFile }));
+    } else if (!options.quiet) {
+      console.log(chalk.yellow("⚠"), "Already onboarded");
+      console.log(chalk.dim(`  ${targetFile}`));
+    }
+    process.exit(EXIT_USER_ERROR);
   }
 
   if (targetFile) {
-    // Append to existing file
     const newContent = existingContent.trimEnd() + "\n\n" + PSST_INSTRUCTIONS + "\n";
     writeFileSync(targetFile, newContent);
-    console.log(`Added psst instructions to ${targetFile}`);
   } else {
-    // Create AGENTS.md
     writeFileSync(agentsMd, PSST_INSTRUCTIONS + "\n");
-    console.log(`Created ${agentsMd} with psst instructions`);
+    targetFile = agentsMd;
   }
 
-  console.log("\nYour agent now knows how to use psst! 🤫");
+  if (options.json) {
+    console.log(JSON.stringify({ success: true, file: targetFile }));
+  } else if (!options.quiet) {
+    console.log(chalk.green("✓"), `Added psst instructions to ${chalk.bold(targetFile)}`);
+    console.log();
+    console.log(chalk.dim("Your agent now knows how to use psst!"));
+    console.log();
+  }
 }

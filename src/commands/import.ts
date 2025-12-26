@@ -1,39 +1,50 @@
+import chalk from "chalk";
+import ora from "ora";
 import { existsSync } from "fs";
 import { getUnlockedVault } from "./common";
+import { EXIT_USER_ERROR } from "../utils/exit-codes";
+import type { OutputOptions } from "../utils/output";
 
-interface ImportOptions {
-  stdin: boolean;
-  fromEnv: boolean;
+interface ImportOptions extends OutputOptions {
+  stdin?: boolean;
+  fromEnv?: boolean;
   pattern?: string;
 }
 
 export async function importSecrets(
   fileOrArgs: string[],
-  options: ImportOptions
+  options: ImportOptions = {}
 ): Promise<void> {
   const vault = await getUnlockedVault();
 
   let entries: [string, string][] = [];
 
   if (options.fromEnv) {
-    // Import from environment variables
     entries = importFromEnv(options.pattern);
   } else if (options.stdin) {
-    // Import from stdin
     const content = await readStdin();
     entries = parseEnvContent(content);
   } else {
-    // Import from file
     const filePath = fileOrArgs[0];
     if (!filePath) {
-      console.error("Error: File path required");
-      console.error("Usage: psst import <file>");
-      process.exit(1);
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: "missing_file" }));
+      } else if (!options.quiet) {
+        console.error(chalk.red("✗"), "File path required");
+        console.log(chalk.dim("  Usage: psst import <file>"));
+      }
+      vault.close();
+      process.exit(EXIT_USER_ERROR);
     }
 
     if (!existsSync(filePath)) {
-      console.error(`Error: File not found: ${filePath}`);
-      process.exit(1);
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: "file_not_found", file: filePath }));
+      } else if (!options.quiet) {
+        console.error(chalk.red("✗"), `File not found: ${filePath}`);
+      }
+      vault.close();
+      process.exit(EXIT_USER_ERROR);
     }
 
     const content = await Bun.file(filePath).text();
@@ -41,31 +52,46 @@ export async function importSecrets(
   }
 
   if (entries.length === 0) {
-    console.log("No secrets to import");
+    if (options.json) {
+      console.log(JSON.stringify({ success: true, imported: 0, skipped: 0 }));
+    } else if (!options.quiet) {
+      console.log(chalk.dim("No secrets to import"));
+    }
     vault.close();
     return;
   }
+
+  const useSpinner = !options.json && !options.quiet && entries.length > 3;
+  const spinner = useSpinner ? ora("Importing secrets...").start() : null;
 
   let imported = 0;
   let skipped = 0;
 
   for (const [name, value] of entries) {
-    // Validate secret name format
     if (!/^[A-Z][A-Z0-9_]*$/.test(name)) {
-      console.log(`  Skipping '${name}' (invalid name format)`);
       skipped++;
       continue;
     }
-
     await vault.setSecret(name, value);
     imported++;
   }
 
   vault.close();
 
-  console.log(`Imported ${imported} secret(s)`);
-  if (skipped > 0) {
-    console.log(`Skipped ${skipped} entry(ies) with invalid names`);
+  if (options.json) {
+    console.log(JSON.stringify({ success: true, imported, skipped }));
+    return;
+  }
+
+  spinner?.succeed(`Imported ${imported} secret(s)`);
+
+  if (!options.quiet) {
+    if (!useSpinner) {
+      console.log(chalk.green("✓"), `Imported ${chalk.bold(imported)} secret(s)`);
+    }
+    if (skipped > 0) {
+      console.log(chalk.dim(`  Skipped ${skipped} invalid entries`));
+    }
   }
 }
 
@@ -75,7 +101,6 @@ function parseEnvContent(content: string): [string, string][] {
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
 
-    // Skip empty lines and comments
     if (!trimmed || trimmed.startsWith("#")) {
       continue;
     }
@@ -88,7 +113,6 @@ function parseEnvContent(content: string): [string, string][] {
     const name = trimmed.slice(0, eqIndex).trim();
     let value = trimmed.slice(eqIndex + 1).trim();
 
-    // Remove surrounding quotes if present
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
@@ -111,12 +135,10 @@ function importFromEnv(pattern?: string): [string, string][] {
   for (const [name, value] of Object.entries(process.env)) {
     if (!value) continue;
 
-    // Skip if pattern provided and doesn't match
     if (regex && !regex.test(name)) {
       continue;
     }
 
-    // Only include uppercase names (typical for secrets)
     if (/^[A-Z][A-Z0-9_]*$/.test(name)) {
       entries.push([name, value]);
     }
