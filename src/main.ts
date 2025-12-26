@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { version } from "../package.json";
 import { init } from "./commands/init";
 import { set } from "./commands/set";
 import { get } from "./commands/get";
@@ -40,6 +41,11 @@ async function main() {
 
   if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
     console.log(HELP);
+    process.exit(0);
+  }
+
+  if (args[0] === "--version" || args[0] === "-v") {
+    console.log(`psst ${version}`);
     process.exit(0);
   }
 
