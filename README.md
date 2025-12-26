@@ -6,7 +6,7 @@
 
 ## The Hall of Shame
 
-I keep pasting API keys into Claude Code. Or just letting it `cat .env`. Every time I tell myself I'll fix it later. I never do.
+I keep pasting API keys into Claude Code. Or just letting it `cat .env`. Every time I tell myself I'll stop doing that. I never do.
 
 ```bash
 # "just read the .env"
