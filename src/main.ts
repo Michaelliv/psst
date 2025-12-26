@@ -10,6 +10,8 @@ import { exec } from "./commands/exec";
 import { onboard } from "./commands/onboard";
 import { importSecrets } from "./commands/import";
 import { exportSecrets } from "./commands/export";
+import { lock } from "./commands/lock";
+import { unlock } from "./commands/unlock";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -146,11 +148,11 @@ async function main() {
     }
 
     case "lock":
-      console.log("TODO: lock");
+      await lock();
       break;
 
     case "unlock":
-      console.log("TODO: unlock");
+      await unlock();
       break;
 
     default:
