@@ -14,9 +14,6 @@ cat .env
 
 # "here, use this key"
 sk-live-4wB7xK9mN2pL8qR3...
-
-# "I'll delete it from the chat after..."
-my database password is hunter2, can you check why queries are slow?
 ```
 
 Your secrets are now:
