@@ -7,7 +7,7 @@ interface ExportOptions extends OutputOptions {
 }
 
 export async function exportSecrets(options: ExportOptions = {}): Promise<void> {
-  const vault = await getUnlockedVault();
+  const vault = await getUnlockedVault(options);
   const secrets = vault.listSecrets();
 
   if (secrets.length === 0) {

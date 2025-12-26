@@ -2,6 +2,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { existsSync } from "fs";
 import { getUnlockedVault } from "./common";
+import { readStdin } from "../utils/input";
 import { EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
@@ -15,7 +16,7 @@ export async function importSecrets(
   fileOrArgs: string[],
   options: ImportOptions = {}
 ): Promise<void> {
-  const vault = await getUnlockedVault();
+  const vault = await getUnlockedVault(options);
 
   let entries: [string, string][] = [];
 
@@ -145,17 +146,4 @@ function importFromEnv(pattern?: string): [string, string][] {
   }
 
   return entries;
-}
-
-async function readStdin(): Promise<string> {
-  const reader = Bun.stdin.stream().getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-
-  return new TextDecoder().decode(Buffer.concat(chunks));
 }

@@ -1,5 +1,7 @@
+import chalk from "chalk";
 import { Vault } from "../vault/vault";
 import { spawn } from "child_process";
+import { EXIT_NO_VAULT, EXIT_AUTH_FAILED, EXIT_USER_ERROR } from "../utils/exit-codes";
 
 interface ExecOptions {
   noMask?: boolean;
@@ -13,17 +15,18 @@ export async function exec(
   const vaultPath = Vault.findVaultPath();
 
   if (!vaultPath) {
-    console.error("No vault found. Run 'psst init' first.");
-    process.exit(1);
+    console.error(chalk.red("✗"), "No vault found");
+    console.log(chalk.dim("  Run: psst init"));
+    process.exit(EXIT_NO_VAULT);
   }
 
   const vault = new Vault(vaultPath);
   const success = await vault.unlock();
 
   if (!success) {
-    console.error("Failed to unlock vault.");
-    console.error("Ensure keychain is available or set PSST_PASSWORD env var.");
-    process.exit(1);
+    console.error(chalk.red("✗"), "Failed to unlock vault");
+    console.log(chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"));
+    process.exit(EXIT_AUTH_FAILED);
   }
 
   // Get all requested secrets
@@ -44,8 +47,9 @@ export async function exec(
   }
 
   if (missing.length > 0) {
-    console.error(`Missing secrets: ${missing.join(", ")}`);
-    process.exit(1);
+    console.error(chalk.red("✗"), `Missing secrets: ${chalk.bold(missing.join(", "))}`);
+    console.log(chalk.dim("  Add with: psst set <NAME>"));
+    process.exit(EXIT_USER_ERROR);
   }
 
   // Build environment with secrets
@@ -83,8 +87,8 @@ export async function exec(
   }
 
   child.on("error", (err) => {
-    console.error(`Failed to execute: ${err.message}`);
-    process.exit(1);
+    console.error(chalk.red("✗"), `Failed to execute: ${err.message}`);
+    process.exit(EXIT_USER_ERROR);
   });
 
   child.on("exit", (code) => {

@@ -3,21 +3,20 @@ import { getUnlockedVault } from "./common";
 import type { OutputOptions } from "../utils/output";
 
 export async function list(options: OutputOptions = {}): Promise<void> {
-  const vault = await getUnlockedVault();
+  const vault = await getUnlockedVault(options);
   const secrets = vault.listSecrets();
   vault.close();
 
   // JSON output
   if (options.json) {
-    console.log(JSON.stringify(
-      secrets.map((s) => ({
+    console.log(JSON.stringify({
+      success: true,
+      secrets: secrets.map((s) => ({
         name: s.name,
         created_at: s.created_at,
         updated_at: s.updated_at,
       })),
-      null,
-      2
-    ));
+    }, null, 2));
     return;
   }
 

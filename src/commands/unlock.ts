@@ -6,6 +6,7 @@ import { homedir } from "os";
 import { Vault } from "../vault/vault";
 import { decryptFile } from "../vault/crypto";
 import { storeKey, generateKey } from "../vault/keychain";
+import { readPassword } from "../utils/input";
 import { EXIT_USER_ERROR, EXIT_AUTH_FAILED, EXIT_NO_VAULT, EXIT_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
@@ -42,9 +43,9 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
 
   if (existsSync(dbPath)) {
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "already_unlocked" }));
+      console.log(JSON.stringify({ success: true, message: "already_unlocked" }));
     } else if (!options.quiet) {
-      console.log(chalk.yellow("⚠"), "Vault is already unlocked");
+      console.log(chalk.green("✓"), "Vault is already unlocked");
     }
     return;
   }
@@ -58,7 +59,7 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
     process.exit(EXIT_NO_VAULT);
   }
 
-  const password = await getPassword(options);
+  const password = await readPassword("Enter unlock password: ", options);
   if (!password) {
     if (options.json) {
       console.log(JSON.stringify({ success: false, error: "no_password" }));
@@ -108,42 +109,4 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
     }
     process.exit(EXIT_ERROR);
   }
-}
-
-async function getPassword(options: OutputOptions): Promise<string | null> {
-  if (process.env.PSST_PASSWORD) {
-    return process.env.PSST_PASSWORD;
-  }
-
-  if (!process.stdin.isTTY || options.quiet || options.json) {
-    return null;
-  }
-
-  const { spawnSync } = await import("child_process");
-
-  process.stdout.write("Enter unlock password: ");
-  spawnSync("stty", ["-echo"], { stdio: "inherit" });
-
-  let input = "";
-  const reader = Bun.stdin.stream().getReader();
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = new TextDecoder().decode(value);
-      if (chunk.includes("\n") || chunk.includes("\r")) {
-        input += chunk.replace(/[\r\n]/g, "");
-        break;
-      }
-      input += chunk;
-    }
-  } finally {
-    reader.releaseLock();
-    spawnSync("stty", ["echo"], { stdio: "inherit" });
-    console.log();
-  }
-
-  return input || null;
 }

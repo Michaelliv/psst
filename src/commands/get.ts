@@ -4,7 +4,7 @@ import { EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
 export async function get(name: string, options: OutputOptions = {}): Promise<void> {
-  const vault = await getUnlockedVault();
+  const vault = await getUnlockedVault(options);
   const value = await vault.getSecret(name);
   vault.close();
 

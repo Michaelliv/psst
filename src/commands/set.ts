@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import { getUnlockedVault } from "./common";
+import { readSecretValue, readStdin } from "../utils/input";
 import { EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
@@ -22,17 +23,9 @@ export async function set(name: string, options: SetOptions = {}): Promise<void>
   let value: string;
 
   if (options.stdin) {
-    const reader = Bun.stdin.stream().getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value: chunk } = await reader.read();
-      if (done) break;
-      chunks.push(chunk);
-    }
-    value = new TextDecoder().decode(Buffer.concat(chunks)).trim();
+    value = (await readStdin()).trim();
   } else {
-    process.stdout.write(`Enter value for ${chalk.bold(name)}: `);
-    value = await readSecretValue();
+    value = await readSecretValue(`Enter value for ${chalk.bold(name)}: `);
   }
 
   if (!value) {
@@ -44,7 +37,7 @@ export async function set(name: string, options: SetOptions = {}): Promise<void>
     process.exit(EXIT_USER_ERROR);
   }
 
-  const vault = await getUnlockedVault();
+  const vault = await getUnlockedVault(options);
   await vault.setSecret(name, value);
   vault.close();
 
@@ -53,44 +46,4 @@ export async function set(name: string, options: SetOptions = {}): Promise<void>
   } else if (!options.quiet) {
     console.log(chalk.green("✓"), `Secret ${chalk.bold(name)} saved`);
   }
-}
-
-async function readSecretValue(): Promise<string> {
-  const { spawnSync } = await import("child_process");
-
-  if (!process.stdin.isTTY) {
-    const reader = Bun.stdin.stream().getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value: chunk } = await reader.read();
-      if (done) break;
-      chunks.push(chunk);
-    }
-    return new TextDecoder().decode(Buffer.concat(chunks)).trim();
-  }
-
-  spawnSync("stty", ["-echo"], { stdio: "inherit" });
-
-  let input = "";
-  const reader = Bun.stdin.stream().getReader();
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = new TextDecoder().decode(value);
-      if (chunk.includes("\n") || chunk.includes("\r")) {
-        input += chunk.replace(/[\r\n]/g, "");
-        break;
-      }
-      input += chunk;
-    }
-  } finally {
-    reader.releaseLock();
-    spawnSync("stty", ["echo"], { stdio: "inherit" });
-    console.log();
-  }
-
-  return input;
 }

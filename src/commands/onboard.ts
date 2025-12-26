@@ -1,7 +1,6 @@
 import chalk from "chalk";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
 const PSST_INSTRUCTIONS = `
@@ -71,15 +70,15 @@ export async function onboard(options: OutputOptions = {}): Promise<void> {
     existingContent = readFileSync(agentsMd, "utf-8");
   }
 
-  // Check if already onboarded
+  // Check if already onboarded - this is idempotent, so it's success
   if (existingContent.includes(MARKER)) {
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "already_onboarded", file: targetFile }));
+      console.log(JSON.stringify({ success: true, file: targetFile, message: "already_onboarded" }));
     } else if (!options.quiet) {
-      console.log(chalk.yellow("⚠"), "Already onboarded");
+      console.log(chalk.green("✓"), "Already onboarded");
       console.log(chalk.dim(`  ${targetFile}`));
     }
-    process.exit(EXIT_USER_ERROR);
+    return;
   }
 
   if (targetFile) {
