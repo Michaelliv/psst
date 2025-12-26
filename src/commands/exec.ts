@@ -1,7 +1,15 @@
 import { Vault } from "../vault/vault";
 import { spawn } from "child_process";
 
-export async function exec(secretNames: string[], cmdArgs: string[]): Promise<void> {
+interface ExecOptions {
+  noMask?: boolean;
+}
+
+export async function exec(
+  secretNames: string[],
+  cmdArgs: string[],
+  options: ExecOptions = {}
+): Promise<void> {
   const vaultPath = Vault.findVaultPath();
 
   if (!vaultPath) {
@@ -51,12 +59,28 @@ export async function exec(secretNames: string[], cmdArgs: string[]): Promise<vo
 
   // Execute command with secrets in environment
   const [cmd, ...args] = cmdArgs;
+  const shouldMask = !options.noMask;
+
+  // Get secret values for masking
+  const secretValues = shouldMask
+    ? Array.from(secrets.values()).filter((v) => v.length > 0)
+    : [];
 
   const child = spawn(cmd, args, {
     env,
-    stdio: "inherit",
+    stdio: shouldMask ? ["inherit", "pipe", "pipe"] : "inherit",
     shell: true,
   });
+
+  if (shouldMask && child.stdout && child.stderr) {
+    child.stdout.on("data", (data: Buffer) => {
+      process.stdout.write(maskSecrets(data.toString(), secretValues));
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      process.stderr.write(maskSecrets(data.toString(), secretValues));
+    });
+  }
 
   child.on("error", (err) => {
     console.error(`Failed to execute: ${err.message}`);
@@ -66,4 +90,13 @@ export async function exec(secretNames: string[], cmdArgs: string[]): Promise<vo
   child.on("exit", (code) => {
     process.exit(code ?? 0);
   });
+}
+
+function maskSecrets(text: string, secrets: string[]): string {
+  let masked = text;
+  for (const secret of secrets) {
+    // Use split/join for global replace (avoids regex escaping issues)
+    masked = masked.split(secret).join("[REDACTED]");
+  }
+  return masked;
 }

@@ -37,6 +37,7 @@ IMPORT/EXPORT
 
 AGENT EXECUTION
   psst <NAME> [NAME...] -- <cmd>   Inject secrets and run command
+  psst --no-mask <NAME> -- <cmd>   Disable output masking (for debugging)
 
 EXAMPLES
   psst set STRIPE_KEY
@@ -63,7 +64,10 @@ async function main() {
   // Check if this is the exec pattern: psst SECRET [SECRET...] -- cmd
   const dashDashIndex = args.indexOf("--");
   if (dashDashIndex > 0) {
-    const secretNames = args.slice(0, dashDashIndex);
+    const noMask = args.includes("--no-mask");
+    const secretNames = args
+      .slice(0, dashDashIndex)
+      .filter((a) => a !== "--no-mask");
     const cmdArgs = args.slice(dashDashIndex + 1);
 
     if (cmdArgs.length === 0) {
@@ -71,7 +75,7 @@ async function main() {
       process.exit(1);
     }
 
-    await exec(secretNames, cmdArgs);
+    await exec(secretNames, cmdArgs, { noMask });
     return;
   }
 
