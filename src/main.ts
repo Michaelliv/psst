@@ -8,6 +8,8 @@ import { list } from "./commands/list";
 import { rm } from "./commands/rm";
 import { exec } from "./commands/exec";
 import { onboard } from "./commands/onboard";
+import { importSecrets } from "./commands/import";
+import { exportSecrets } from "./commands/export";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -25,6 +27,13 @@ SECRET MANAGEMENT
   psst list                     List secret names
   psst list --json              List as JSON (names only, no values)
   psst rm <NAME>                Remove secret
+
+IMPORT/EXPORT
+  psst import <file>            Import secrets from .env file
+  psst import --stdin           Import secrets from stdin
+  psst import --from-env        Import from environment variables
+  psst export                   Export secrets to stdout (.env format)
+  psst export --env-file <f>    Export secrets to file
 
 AGENT EXECUTION
   psst <NAME> [NAME...] -- <cmd>   Inject secrets and run command
@@ -108,6 +117,29 @@ async function main() {
       }
       await rm(args[1]);
       break;
+
+    case "import": {
+      const fromStdin = args.includes("--stdin");
+      const fromEnv = args.includes("--from-env");
+      const patternIndex = args.indexOf("--pattern");
+      const pattern = patternIndex !== -1 ? args[patternIndex + 1] : undefined;
+
+      // Get remaining args (file path)
+      const fileArgs = args.slice(1).filter(
+        (a) => !a.startsWith("--") && a !== pattern
+      );
+
+      await importSecrets(fileArgs, { stdin: fromStdin, fromEnv, pattern });
+      break;
+    }
+
+    case "export": {
+      const envFileIndex = args.indexOf("--env-file");
+      const envFile = envFileIndex !== -1 ? args[envFileIndex + 1] : undefined;
+
+      await exportSecrets({ envFile });
+      break;
+    }
 
     case "lock":
       console.log("TODO: lock");
