@@ -22,8 +22,19 @@ export async function exec(secretNames: string[], cmdArgs: string[]): Promise<vo
   const secrets = await vault.getSecrets(secretNames);
   vault.close();
 
-  // Check for missing secrets
-  const missing = secretNames.filter((name) => !secrets.has(name));
+  // Check for missing secrets, fallback to env vars
+  const missing: string[] = [];
+  for (const name of secretNames) {
+    if (!secrets.has(name)) {
+      // Fallback to environment variable
+      if (process.env[name]) {
+        secrets.set(name, process.env[name]!);
+      } else {
+        missing.push(name);
+      }
+    }
+  }
+
   if (missing.length > 0) {
     console.error(`Missing secrets: ${missing.join(", ")}`);
     process.exit(1);
