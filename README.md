@@ -94,6 +94,13 @@ psst get <NAME>               # View value (debugging only)
 psst list                     # List all secret names
 psst list --json              # JSON output (names only)
 psst rm <NAME>                # Delete secret
+
+# Import/export
+psst import .env              # Import from .env file
+psst import --stdin           # Import from stdin
+psst import --from-env        # Import from environment variables
+psst export                   # Export to stdout (.env format)
+psst export --env-file .env   # Export to file
 ```
 
 ### Project-Local Vaults
