@@ -21,13 +21,19 @@ psst AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY -- aws s3 ls
 psst DATABASE_URL -- prisma migrate deploy
 \`\`\`
 
+**Note:** Secret values are automatically redacted in command output (replaced with \`[REDACTED]\`).
+
 ### Available Secrets
 
-Run \`psst list\` to see what secrets are available.
+\`\`\`bash
+psst list                     # Human-readable list
+psst list --json              # Structured output
+\`\`\`
 
 ### Missing a Secret?
 
-Ask the user to add it:
+psst automatically checks environment variables as a fallback. If neither the vault nor the environment has the secret, ask the user to add it:
+
 > "I need \`STRIPE_KEY\` to proceed. Please run \`psst set STRIPE_KEY\` to add it."
 
 ### Important

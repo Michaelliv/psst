@@ -92,7 +92,6 @@ psst set <NAME>               # Add/update secret (interactive)
 psst set <NAME> --stdin       # Pipe value in (for scripts)
 psst get <NAME>               # View value (debugging only)
 psst list                     # List all secret names
-psst list --json              # JSON output (names only)
 psst rm <NAME>                # Delete secret
 
 # Import/export
@@ -101,6 +100,18 @@ psst import --stdin           # Import from stdin
 psst import --from-env        # Import from environment variables
 psst export                   # Export to stdout (.env format)
 psst export --env-file .env   # Export to file
+
+# Vault encryption (for backups/travel)
+psst lock                     # Encrypt vault at rest with password
+psst unlock                   # Decrypt vault
+```
+
+### Global Flags
+
+All commands support:
+```bash
+--json                        # Structured JSON output
+-q, --quiet                   # Suppress output, use exit codes
 ```
 
 ### Project-Local Vaults
@@ -143,8 +154,10 @@ psst DOCKER_TOKEN -- docker login -u me --password $DOCKER_TOKEN
 ### What You Get Back
 
 - Exit code of the command
-- stdout/stderr of the command
+- stdout/stderr of the command (with secrets automatically redacted)
 - **Not** the secret value
+
+Secrets are automatically replaced with `[REDACTED]` in command output. Use `--no-mask` if you need to see the actual output for debugging.
 
 ### Checking Available Secrets
 
@@ -154,6 +167,8 @@ psst list --json              # Structured output
 ```
 
 ### If a Secret is Missing
+
+psst will automatically check environment variables as a fallback. If neither the vault nor the environment has the secret, the command will fail.
 
 Ask the human to add it:
 > "I need `STRIPE_KEY` to call the Stripe API. Please run `psst set STRIPE_KEY` to add it."
@@ -189,7 +204,9 @@ Ask the human to add it:
 **Security model:**
 - Secrets encrypted at rest (AES-256-GCM)
 - Encryption key stored in OS Keychain (macOS Keychain, libsecret, Windows Credential Manager)
-- Secrets never written to stdout, logs, or agent context
+- Secrets automatically redacted in command output (`[REDACTED]`)
+- Optional vault lock with password for backups/travel
+- Secrets never exposed to agent context
 - Zero friction for legitimate use
 
 ---
