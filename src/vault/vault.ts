@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, readdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { encrypt, decrypt, keyToBuffer } from "./crypto";
@@ -170,25 +170,91 @@ export class Vault {
     return { success: true };
   }
 
-  static findVaultPath(): string | null {
-    // Check local .psst/ first
+  static findVaultPath(env?: string): string | null {
+    // If env specified, look for env-specific vault
+    if (env) {
+      // Check local env path first
+      const localEnvPath = join(process.cwd(), VAULT_DIR_NAME, "envs", env);
+      if (existsSync(join(localEnvPath, DB_NAME))) {
+        return localEnvPath;
+      }
+
+      // Check global env path
+      const globalEnvPath = join(homedir(), VAULT_DIR_NAME, "envs", env);
+      if (existsSync(join(globalEnvPath, DB_NAME))) {
+        return globalEnvPath;
+      }
+
+      return null;
+    }
+
+    // No env specified: check legacy paths first, then default env
+    // Check local .psst/ first (legacy)
     const localPath = join(process.cwd(), VAULT_DIR_NAME);
     if (existsSync(join(localPath, DB_NAME))) {
       return localPath;
     }
 
-    // Check global ~/.psst/
+    // Check global ~/.psst/ (legacy)
     const globalPath = join(homedir(), VAULT_DIR_NAME);
     if (existsSync(join(globalPath, DB_NAME))) {
       return globalPath;
     }
 
+    // Check local default env
+    const localDefaultEnv = join(process.cwd(), VAULT_DIR_NAME, "envs", "default");
+    if (existsSync(join(localDefaultEnv, DB_NAME))) {
+      return localDefaultEnv;
+    }
+
+    // Check global default env
+    const globalDefaultEnv = join(homedir(), VAULT_DIR_NAME, "envs", "default");
+    if (existsSync(join(globalDefaultEnv, DB_NAME))) {
+      return globalDefaultEnv;
+    }
+
     return null;
   }
 
-  static getVaultPath(global: boolean = true): string {
-    return global
+  static getVaultPath(global: boolean = true, env?: string): string {
+    const basePath = global
       ? join(homedir(), VAULT_DIR_NAME)
       : join(process.cwd(), VAULT_DIR_NAME);
+
+    if (env) {
+      return join(basePath, "envs", env);
+    }
+
+    return basePath;
+  }
+
+  static listEnvironments(global: boolean = true): string[] {
+    const basePath = global
+      ? join(homedir(), VAULT_DIR_NAME)
+      : join(process.cwd(), VAULT_DIR_NAME);
+
+    const envs: string[] = [];
+
+    // Check for legacy vault (counts as "default")
+    if (existsSync(join(basePath, DB_NAME))) {
+      envs.push("default (legacy)");
+    }
+
+    // Check for envs folder
+    const envsPath = join(basePath, "envs");
+    if (existsSync(envsPath)) {
+      try {
+        const entries = readdirSync(envsPath, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && existsSync(join(envsPath, entry.name, DB_NAME))) {
+            envs.push(entry.name);
+          }
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    return envs;
   }
 }

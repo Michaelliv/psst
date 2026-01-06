@@ -5,6 +5,7 @@ import { EXIT_NO_VAULT, EXIT_AUTH_FAILED, EXIT_USER_ERROR } from "../utils/exit-
 
 interface ExecOptions {
   noMask?: boolean;
+  env?: string;
 }
 
 export async function exec(
@@ -12,11 +13,12 @@ export async function exec(
   cmdArgs: string[],
   options: ExecOptions = {}
 ): Promise<void> {
-  const vaultPath = Vault.findVaultPath();
+  const vaultPath = Vault.findVaultPath(options.env);
 
   if (!vaultPath) {
-    console.error(chalk.red("✗"), "No vault found");
-    console.log(chalk.dim("  Run: psst init"));
+    const envMsg = options.env ? ` for environment "${options.env}"` : "";
+    console.error(chalk.red("✗"), `No vault found${envMsg}`);
+    console.log(chalk.dim(`  Run: psst init${options.env ? ` --env ${options.env}` : ""}`));
     process.exit(EXIT_NO_VAULT);
   }
 

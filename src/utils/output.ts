@@ -3,6 +3,7 @@ import chalk from "chalk";
 export interface OutputOptions {
   json?: boolean;
   quiet?: boolean;
+  env?: string;
 }
 
 // Success indicators
