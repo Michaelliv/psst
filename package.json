@@ -15,7 +15,8 @@
     "build": "bun build --compile src/main.ts --outfile psst",
     "build:linux": "bun build --compile --target=bun-linux-x64 src/main.ts --outfile psst-linux-x64",
     "build:mac-arm": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile psst-darwin-arm64",
-    "build:mac-x64": "bun build --compile --target=bun-darwin-x64 src/main.ts --outfile psst-darwin-x64"
+    "build:mac-x64": "bun build --compile --target=bun-darwin-x64 src/main.ts --outfile psst-darwin-x64",
+    "test": "bun test"
   },
   "repository": {
     "type": "git",
