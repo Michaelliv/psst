@@ -4,14 +4,15 @@ import { EXIT_NO_VAULT, EXIT_AUTH_FAILED } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
 export async function getUnlockedVault(options: OutputOptions = {}): Promise<Vault> {
-  const vaultPath = Vault.findVaultPath();
+  const vaultPath = Vault.findVaultPath(options.env);
 
   if (!vaultPath) {
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "no_vault" }));
+      console.log(JSON.stringify({ success: false, error: "no_vault", env: options.env || "default" }));
     } else if (!options.quiet) {
-      console.error(chalk.red("✗"), "No vault found");
-      console.log(chalk.dim("  Run: psst init"));
+      const envMsg = options.env ? ` for environment "${options.env}"` : "";
+      console.error(chalk.red("✗"), `No vault found${envMsg}`);
+      console.log(chalk.dim(`  Run: psst init${options.env ? ` --env ${options.env}` : ""}`));
     }
     process.exit(EXIT_NO_VAULT);
   }

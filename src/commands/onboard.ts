@@ -23,11 +23,21 @@ psst DATABASE_URL -- prisma migrate deploy
 
 **Note:** Secret values are automatically redacted in command output (replaced with \`[REDACTED]\`).
 
+### Environments
+
+If this project uses multiple environments (dev/staging/prod), use the \`--env\` flag:
+
+\`\`\`bash
+psst --env prod API_KEY -- curl https://api.example.com
+psst --env dev list
+\`\`\`
+
 ### Available Secrets
 
 \`\`\`bash
 psst list                     # Human-readable list
 psst list --json              # Structured output
+psst list envs                # List available environments
 \`\`\`
 
 ### Missing a Secret?

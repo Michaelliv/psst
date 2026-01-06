@@ -12,15 +12,18 @@ import { importSecrets } from "./commands/import";
 import { exportSecrets } from "./commands/export";
 import { lock } from "./commands/lock";
 import { unlock } from "./commands/unlock";
+import { listEnvs } from "./commands/list-envs";
 
 const HELP = `
 psst - AI-native secrets manager
 
 VAULT MANAGEMENT
   psst init                     Create vault (~/.psst or .psst/)
+  psst init --env <name>        Create vault for specific environment
   psst onboard                  Add psst instructions to CLAUDE.md/AGENTS.md
   psst lock                     Lock vault (encrypt at rest)
   psst unlock                   Unlock vault
+  psst list envs                List available environments
 
 SECRET MANAGEMENT
   psst set <NAME>               Set secret (interactive prompt)
@@ -41,14 +44,21 @@ AGENT EXECUTION
   psst --no-mask <NAME> -- <cmd>   Disable output masking (for debugging)
 
 GLOBAL FLAGS
+  --env <name>                  Use specific environment (default: "default")
   --json                        Output as JSON
   -q, --quiet                   Suppress output, use exit codes
+
+ENVIRONMENT VARIABLE
+  PSST_ENV                      Alternative to --env flag
 
 EXAMPLES
   psst set STRIPE_KEY
   psst list
+  psst --env prod set API_KEY
+  psst --env prod list
+  PSST_ENV=prod psst list
   psst STRIPE_KEY -- curl -H "Authorization: Bearer $STRIPE_KEY" https://api.stripe.com
-  psst AWS_KEY AWS_SECRET -- aws s3 ls
+  psst --env prod API_KEY -- curl https://api.example.com
 `;
 
 async function main() {
@@ -57,10 +67,25 @@ async function main() {
   // Parse global flags
   const json = args.includes("--json");
   const quiet = args.includes("--quiet") || args.includes("-q");
-  const options = { json, quiet };
+
+  // Parse --env flag or fallback to PSST_ENV
+  let env: string | undefined;
+  const envIndex = args.indexOf("--env");
+  if (envIndex !== -1 && args[envIndex + 1] && !args[envIndex + 1].startsWith("-")) {
+    env = args[envIndex + 1];
+  } else if (process.env.PSST_ENV) {
+    env = process.env.PSST_ENV;
+  }
+
+  const options = { json, quiet, env };
 
   // Remove global flags from args for command processing
-  const cleanArgs = args.filter(a => a !== "--json" && a !== "--quiet" && a !== "-q");
+  const cleanArgs = args.filter((a, i) => {
+    if (a === "--json" || a === "--quiet" || a === "-q") return false;
+    if (a === "--env") return false;
+    if (i > 0 && args[i - 1] === "--env") return false;
+    return true;
+  });
 
   if (cleanArgs.length === 0 || cleanArgs[0] === "--help" || cleanArgs[0] === "-h") {
     if (!quiet) console.log(HELP);
@@ -92,7 +117,7 @@ async function main() {
       process.exit(1);
     }
 
-    await exec(secretNames, cmdArgs, { noMask });
+    await exec(secretNames, cmdArgs, { noMask, env });
     return;
   }
 
@@ -133,7 +158,11 @@ async function main() {
       break;
 
     case "list":
-      await list(options);
+      if (cleanArgs[1] === "envs") {
+        await listEnvs(options);
+      } else {
+        await list(options);
+      }
       break;
 
     case "rm":

@@ -14,26 +14,52 @@ const DB_NAME = "vault.db";
 const LOCKED_NAME = "vault.db.locked";
 
 export async function unlock(options: OutputOptions = {}): Promise<void> {
-  let checkPath = Vault.findVaultPath();
+  let checkPath = Vault.findVaultPath(options.env);
 
   // Look for locked vault even if no unlocked vault exists
   if (!checkPath) {
-    const globalPath = join(homedir(), ".psst");
-    const localPath = join(process.cwd(), ".psst");
+    if (options.env) {
+      // Check env-specific paths for locked vault
+      const globalEnvPath = join(homedir(), ".psst", "envs", options.env);
+      const localEnvPath = join(process.cwd(), ".psst", "envs", options.env);
 
-    if (existsSync(join(localPath, LOCKED_NAME))) {
-      checkPath = localPath;
-    } else if (existsSync(join(globalPath, LOCKED_NAME))) {
-      checkPath = globalPath;
+      if (existsSync(join(localEnvPath, LOCKED_NAME))) {
+        checkPath = localEnvPath;
+      } else if (existsSync(join(globalEnvPath, LOCKED_NAME))) {
+        checkPath = globalEnvPath;
+      }
+    } else {
+      // Check legacy paths for locked vault
+      const globalPath = join(homedir(), ".psst");
+      const localPath = join(process.cwd(), ".psst");
+
+      if (existsSync(join(localPath, LOCKED_NAME))) {
+        checkPath = localPath;
+      } else if (existsSync(join(globalPath, LOCKED_NAME))) {
+        checkPath = globalPath;
+      }
+
+      // Also check default env paths
+      if (!checkPath) {
+        const globalDefaultEnv = join(homedir(), ".psst", "envs", "default");
+        const localDefaultEnv = join(process.cwd(), ".psst", "envs", "default");
+
+        if (existsSync(join(localDefaultEnv, LOCKED_NAME))) {
+          checkPath = localDefaultEnv;
+        } else if (existsSync(join(globalDefaultEnv, LOCKED_NAME))) {
+          checkPath = globalDefaultEnv;
+        }
+      }
     }
   }
 
   if (!checkPath) {
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "no_vault" }));
+      console.log(JSON.stringify({ success: false, error: "no_vault", env: options.env || "default" }));
     } else if (!options.quiet) {
-      console.error(chalk.red("✗"), "No vault found");
-      console.log(chalk.dim("  Run: psst init"));
+      const envMsg = options.env ? ` for environment "${options.env}"` : "";
+      console.error(chalk.red("✗"), `No vault found${envMsg}`);
+      console.log(chalk.dim(`  Run: psst init${options.env ? ` --env ${options.env}` : ""}`));
     }
     process.exit(EXIT_NO_VAULT);
   }

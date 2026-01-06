@@ -103,10 +103,35 @@ psst lock                     # Encrypt vault at rest with password
 psst unlock                   # Decrypt vault
 ```
 
+### Environments
+
+Organize secrets by environment (dev/staging/prod):
+
+```bash
+psst init --env prod          # Create vault for "prod" environment
+psst --env prod set API_KEY   # Set secret in prod
+psst --env prod list          # List secrets in prod
+psst --env prod API_KEY -- curl https://api.example.com
+
+# List all environments
+psst list envs
+```
+
+Environments are stored in `~/.psst/envs/<name>/vault.db`.
+
+You can also use the `PSST_ENV` environment variable:
+```bash
+export PSST_ENV=prod
+psst list                     # Uses prod environment
+```
+
+**Note:** Existing vaults at `~/.psst/vault.db` continue to work as the "default" environment.
+
 ### Global Flags
 
 All commands support:
 ```bash
+--env <name>                  # Use specific environment
 --json                        # Structured JSON output
 -q, --quiet                   # Suppress output, use exit codes
 ```
@@ -115,6 +140,7 @@ All commands support:
 
 ```bash
 psst init --local             # Creates .psst/ in current directory
+psst init --local --env dev   # Creates .psst/envs/dev/ in current directory
 ```
 
 Local vaults take precedence over the global `~/.psst/` vault.
