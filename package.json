@@ -1,6 +1,6 @@
 {
   "name": "@pssst/cli",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "AI-native secrets manager. Agents use secrets without seeing them.",
   "module": "src/main.ts",
   "type": "module",
