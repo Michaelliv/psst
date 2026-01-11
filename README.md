@@ -133,19 +133,61 @@ psst list                     # Uses prod environment
 
 All commands support:
 ```bash
+-g, --global                  # Use global vault (~/.psst/)
 --env <name>                  # Use specific environment
 --json                        # Structured JSON output
 -q, --quiet                   # Suppress output, use exit codes
 ```
 
-### Project-Local Vaults
+### Local vs Global Vaults
+
+By default, psst creates a **local vault** in your project directory:
 
 ```bash
-psst init --local             # Creates .psst/ in current directory
-psst init --local --env dev   # Creates .psst/envs/dev/ in current directory
+psst init                     # Creates .psst/ in current directory
+psst init --env dev           # Creates .psst/envs/dev/ in current directory
 ```
 
-Local vaults take precedence over the global `~/.psst/` vault.
+For user-wide secrets, use the global vault:
+
+```bash
+psst init --global            # Creates ~/.psst/
+psst --global set API_KEY     # Store in global vault
+psst --global list            # List global secrets
+```
+
+### Secret Scanning
+
+Prevent accidentally committing secrets to git:
+
+```bash
+# Scan files for leaked secrets
+psst scan                     # Scan all tracked files
+psst scan --staged            # Scan only git staged files
+psst scan --path ./src        # Scan specific directory
+
+# Install pre-commit hook (runs scan automatically)
+psst install-hook
+```
+
+The scanner checks for **actual vault secret values** — no regex false positives. If a secret is found:
+
+```
+✗ Secrets found in files:
+
+  config.js:12
+    Contains: STRIPE_KEY
+
+Found 1 secret(s) in 1 file(s)
+  Tip: Use PSST_SKIP_SCAN=1 git commit to bypass
+```
+
+Bypass the hook when needed:
+```bash
+PSST_SKIP_SCAN=1 git commit -m "message"
+# or
+git commit --no-verify
+```
 
 ---
 
