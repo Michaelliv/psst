@@ -14,6 +14,8 @@ import { exportSecrets } from "./commands/export";
 import { lock } from "./commands/lock";
 import { unlock } from "./commands/unlock";
 import { listEnvs } from "./commands/list-envs";
+import { scan } from "./commands/scan";
+import { installHook } from "./commands/install-hook";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -44,6 +46,12 @@ IMPORT/EXPORT
 AGENT EXECUTION
   psst run <command>              Run command with ALL secrets injected
   psst <NAME> [NAME...] -- <cmd>  Inject specific secrets and run command
+
+SECRET SCANNING
+  psst scan                       Scan files for leaked secrets
+  psst scan --staged              Scan only git staged files
+  psst scan --path <dir>          Scan specific directory
+  psst install-hook               Install git pre-commit hook
 
 OPTIONS
   --no-mask                       Disable output masking (for debugging)
@@ -227,6 +235,14 @@ async function main() {
 
     case "unlock":
       await unlock(options);
+      break;
+
+    case "scan":
+      await scan(cleanArgs.slice(1), options);
+      break;
+
+    case "install-hook":
+      await installHook(cleanArgs.slice(1), options);
       break;
 
     case "run": {
