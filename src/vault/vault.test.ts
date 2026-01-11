@@ -301,4 +301,53 @@ describe("Environment support integration tests", () => {
       expect(existsSync(join(testDir, ".psst", "envs", "default", "vault.db.locked"))).toBe(true);
     });
   });
+
+  describe("set command", () => {
+    it("sets secret with value as argument (#15)", async () => {
+      await runPsst(["init", "--local"]);
+
+      // Set secret with value as second argument
+      const result = await runPsst(["set", "MY_KEY", "my-value-123"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Secret MY_KEY saved");
+
+      // Verify the value was saved
+      const getResult = await runPsst(["get", "MY_KEY"]);
+      expect(getResult.stdout.trim()).toBe("my-value-123");
+    });
+
+    it("shows success message when setting via stdin (#16)", async () => {
+      await runPsst(["init", "--local"]);
+
+      const setProc = Bun.spawn(
+        ["bun", "run", join(originalCwd, "src/main.ts"), "set", "STDIN_KEY", "--stdin"],
+        {
+          cwd: testDir,
+          env: { ...process.env, PSST_PASSWORD: "testpass123" },
+          stdin: new TextEncoder().encode("stdin-value-456"),
+          stdout: "pipe",
+          stderr: "pipe",
+        }
+      );
+      const stdout = await new Response(setProc.stdout).text();
+      await setProc.exited;
+
+      // Should show success message
+      expect(stdout).toContain("Secret STDIN_KEY saved");
+
+      // Verify value was saved
+      const getResult = await runPsst(["get", "STDIN_KEY"]);
+      expect(getResult.stdout.trim()).toBe("stdin-value-456");
+    });
+
+    it("prompts for value when not provided as argument", async () => {
+      await runPsst(["init", "--local"]);
+
+      // Without value argument and without stdin, should exit with error in non-TTY
+      const result = await runPsst(["set", "PROMPT_KEY", "--json"]);
+      expect(result.exitCode).not.toBe(0);
+      const json = JSON.parse(result.stdout);
+      expect(json.error).toBe("empty_value");
+    });
+  });
 });

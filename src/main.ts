@@ -26,7 +26,7 @@ VAULT MANAGEMENT
   psst list envs                List available environments
 
 SECRET MANAGEMENT
-  psst set <NAME>               Set secret (interactive prompt)
+  psst set <NAME> [VALUE]       Set secret (prompt if no value)
   psst set <NAME> --stdin       Set secret from stdin
   psst get <NAME>               Get secret value (human debugging)
   psst list                     List secret names
@@ -131,18 +131,22 @@ async function main() {
       await onboard(options);
       break;
 
-    case "set":
+    case "set": {
       if (!cleanArgs[1]) {
         if (json) {
           console.log(JSON.stringify({ success: false, error: "missing_name" }));
         } else if (!quiet) {
           console.error("Error: Secret name required");
-          console.error("Usage: psst set <NAME>");
+          console.error("Usage: psst set <NAME> [VALUE]");
         }
         process.exit(1);
       }
-      await set(cleanArgs[1], { ...options, stdin: cleanArgs.includes("--stdin") });
+      const setStdin = cleanArgs.includes("--stdin");
+      // Value is cleanArgs[2] if it exists and isn't a flag
+      const setValue = cleanArgs[2] && !cleanArgs[2].startsWith("-") ? cleanArgs[2] : undefined;
+      await set(cleanArgs[1], { ...options, stdin: setStdin, value: setValue });
       break;
+    }
 
     case "get":
       if (!cleanArgs[1]) {
