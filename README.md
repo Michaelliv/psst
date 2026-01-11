@@ -153,15 +153,28 @@ Local vaults take precedence over the global `~/.psst/` vault.
 
 **You don't read secrets. You use them.**
 
-### The Pattern
+### The Simple Way
 
 ```bash
-psst <SECRET_NAME> -- <command>
+psst run <command>
 ```
 
-This injects `SECRET_NAME` into the command's environment. You never see the value.
+This injects **all** vault secrets into the command's environment. You never see the values.
 
-### Examples
+```bash
+# Run any command with all secrets available
+psst run ./deploy.sh
+psst run python my_script.py
+psst run docker-compose up
+```
+
+### Specific Secrets
+
+If you only need certain secrets:
+
+```bash
+psst <SECRET_NAME> [SECRET_NAME...] -- <command>
+```
 
 ```bash
 # Single secret
@@ -169,11 +182,6 @@ psst STRIPE_KEY -- curl -H "Authorization: Bearer $STRIPE_KEY" https://api.strip
 
 # Multiple secrets
 psst AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY -- aws s3 ls
-
-# Any command that reads from environment
-psst DATABASE_URL -- prisma migrate deploy
-psst OPENAI_API_KEY -- python my_script.py
-psst DOCKER_TOKEN -- docker login -u me --password $DOCKER_TOKEN
 ```
 
 ### What You Get Back
@@ -206,12 +214,12 @@ Ask the human to add it:
 ┌───────────────────────────────────────────────────────┐
 │  Agent Context                                        │
 │                                                       │
-│  "I need to call Stripe API"                          │
-│  > psst STRIPE_KEY -- curl https://api.stripe.com     │
+│  "I need to deploy the app"                           │
+│  > psst run ./deploy.sh                               │
 │                                                       │
 │  [Command executed, exit code 0]                      │
 │                                                       │
-│  (Agent never sees sk_live_...)                       │
+│  (Agent never sees any secret values)                 │
 └───────────────────────────────────────────────────────┘
                           │
                           ▼
