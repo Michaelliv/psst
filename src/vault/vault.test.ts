@@ -220,4 +220,85 @@ describe("Environment support integration tests", () => {
       expect(result.stdout.trim()).toBe("secret-value-789");
     });
   });
+
+  describe("lock/unlock preserves secrets", () => {
+    // Note: In non-TTY/headless mode, PSST_PASSWORD serves as both:
+    // 1. The vault encryption key (for secrets)
+    // 2. The lock/unlock password (for vault file encryption)
+    // This is by design for CI/headless environments.
+
+    it("secrets survive lock/unlock cycle", async () => {
+      // Create vault and set secret (all using same PSST_PASSWORD)
+      await runPsst(["init", "--local"]);
+
+      const setProc = Bun.spawn(
+        ["bun", "run", join(originalCwd, "src/main.ts"), "set", "PRESERVED_SECRET", "--stdin"],
+        {
+          cwd: testDir,
+          env: { ...process.env, PSST_PASSWORD: "testpass123" },
+          stdin: new TextEncoder().encode("my-secret-value-abc"),
+          stdout: "pipe",
+          stderr: "pipe",
+        }
+      );
+      await setProc.exited;
+
+      // Verify secret before lock
+      const getBefore = await runPsst(["get", "PRESERVED_SECRET"]);
+      expect(getBefore.stdout).toContain("my-secret-value-abc");
+
+      // Lock vault (same PSST_PASSWORD used for vault key AND lock password)
+      const lockResult = await runPsst(["lock"]);
+      expect(lockResult.exitCode).toBe(0);
+
+      // Verify vault is locked (vault.db gone, vault.db.locked exists)
+      expect(existsSync(join(testDir, ".psst", "envs", "default", "vault.db"))).toBe(false);
+      expect(existsSync(join(testDir, ".psst", "envs", "default", "vault.db.locked"))).toBe(true);
+
+      // Unlock vault (same PSST_PASSWORD)
+      const unlockResult = await runPsst(["unlock"]);
+      expect(unlockResult.exitCode).toBe(0);
+
+      // Verify vault is unlocked
+      expect(existsSync(join(testDir, ".psst", "envs", "default", "vault.db"))).toBe(true);
+      expect(existsSync(join(testDir, ".psst", "envs", "default", "vault.db.locked"))).toBe(false);
+
+      // Verify secret is still accessible after unlock
+      const getAfter = await runPsst(["get", "PRESERVED_SECRET"]);
+      expect(getAfter.exitCode).toBe(0);
+      expect(getAfter.stdout).toContain("my-secret-value-abc");
+    });
+
+    it("fails with wrong unlock password", async () => {
+      await runPsst(["init", "--local"]);
+
+      const setProc = Bun.spawn(
+        ["bun", "run", join(originalCwd, "src/main.ts"), "set", "TEST_KEY", "--stdin"],
+        {
+          cwd: testDir,
+          env: { ...process.env, PSST_PASSWORD: "testpass123" },
+          stdin: new TextEncoder().encode("test-value"),
+          stdout: "pipe",
+          stderr: "pipe",
+        }
+      );
+      await setProc.exited;
+
+      // Lock vault
+      await runPsst(["lock"]);
+
+      // Try to unlock with wrong password
+      const unlockProc = Bun.spawn(["bun", "run", join(originalCwd, "src/main.ts"), "unlock"], {
+        cwd: testDir,
+        env: { ...process.env, PSST_PASSWORD: "wrongpassword" },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const unlockExitCode = await unlockProc.exited;
+      expect(unlockExitCode).not.toBe(0);
+
+      // Vault should still be locked
+      expect(existsSync(join(testDir, ".psst", "envs", "default", "vault.db.locked"))).toBe(true);
+    });
+  });
 });
