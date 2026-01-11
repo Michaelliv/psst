@@ -8,6 +8,7 @@ interface RunOptions {
   noMask?: boolean;
   env?: string;
   global?: boolean;
+  tags?: string[];
 }
 
 /**
@@ -38,8 +39,8 @@ export async function run(
     process.exit(EXIT_AUTH_FAILED);
   }
 
-  // Get ALL secrets
-  const secretMetas = vault.listSecrets();
+  // Get secrets (optionally filtered by tags)
+  const secretMetas = vault.listSecrets(options.tags);
   const secrets = new Map<string, string>();
 
   for (const meta of secretMetas) {
@@ -52,7 +53,8 @@ export async function run(
   vault.close();
 
   if (secrets.size === 0) {
-    console.error(chalk.yellow("⚠"), "No secrets in vault");
+    const tagMsg = options.tags?.length ? ` with tags: ${options.tags.join(", ")}` : "";
+    console.error(chalk.yellow("⚠"), `No secrets in vault${tagMsg}`);
     console.log(chalk.dim("  Add secrets with: psst set <NAME>"));
   }
 

@@ -16,6 +16,7 @@ import { unlock } from "./commands/unlock";
 import { listEnvs } from "./commands/list-envs";
 import { scan } from "./commands/scan";
 import { installHook } from "./commands/install-hook";
+import { tag, untag } from "./commands/tag";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -32,9 +33,13 @@ VAULT MANAGEMENT
 SECRET MANAGEMENT
   psst set <NAME> [VALUE]       Set secret (prompt if no value)
   psst set <NAME> --stdin       Set secret from stdin
+  psst set <NAME> --tag <t>     Set secret with tags (repeatable)
   psst get <NAME>               Get secret value (human debugging)
   psst list                     List secret names
+  psst list --tag <t>           List secrets with tag (repeatable)
   psst rm <NAME>                Remove secret
+  psst tag <NAME> <t1> [t2...]  Add tags to secret
+  psst untag <NAME> <t1>...     Remove tags from secret
 
 IMPORT/EXPORT
   psst import <file>            Import secrets from .env file
@@ -45,7 +50,9 @@ IMPORT/EXPORT
 
 AGENT EXECUTION
   psst run <command>              Run command with ALL secrets injected
+  psst run --tag <t> <command>    Run with secrets matching tag
   psst <NAME> [NAME...] -- <cmd>  Inject specific secrets and run command
+  psst --tag <t> -- <cmd>         Inject secrets with tag and run command
 
 SECRET SCANNING
   psst scan                       Scan files for leaked secrets
@@ -59,6 +66,7 @@ OPTIONS
 GLOBAL FLAGS
   -g, --global                  Use global vault (~/.psst/) instead of local
   --env <name>                  Use specific environment (default: "default")
+  --tag <name>                  Filter by tag (repeatable for multiple tags)
   --json                        Output as JSON
   -q, --quiet                   Suppress output, use exit codes
 
@@ -70,8 +78,11 @@ EXAMPLES
   psst init                                               # Create local vault
   psst init --global                                      # Create global vault
   psst set STRIPE_KEY
+  psst set AWS_KEY --tag aws --tag prod                   # Set with tags
   psst list
+  psst list --tag aws                                     # Filter by tag
   psst run ./deploy.sh                                    # All secrets injected
+  psst --tag aws run ./deploy.sh                          # Only aws-tagged secrets
   psst STRIPE_KEY -- curl -H "Authorization: $STRIPE_KEY" https://api.stripe.com
   psst --env prod run ./deploy.sh                         # Use prod environment
   psst --global list                                      # List from global vault
@@ -99,7 +110,15 @@ async function main() {
     env = process.env.PSST_ENV;
   }
 
-  const options = { json, quiet, env, global };
+  // Parse --tag flags (can appear multiple times)
+  const tags: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--tag" && args[i + 1] && !args[i + 1].startsWith("-")) {
+      tags.push(args[i + 1]);
+    }
+  }
+
+  const options = { json, quiet, env, global, tags: tags.length > 0 ? tags : undefined };
 
   // Remove global flags from args for command processing
   const cleanArgs = args.filter((a, i) => {
@@ -107,6 +126,8 @@ async function main() {
     if (a === "--global" || a === "-g") return false;
     if (a === "--env") return false;
     if (i > 0 && args[i - 1] === "--env") return false;
+    if (a === "--tag") return false;
+    if (i > 0 && args[i - 1] === "--tag") return false;
     return true;
   });
 
@@ -127,8 +148,9 @@ async function main() {
   const command = cleanArgs[0];
 
   // Check if this is the exec pattern: psst SECRET [SECRET...] -- cmd
+  // Also handles: psst --tag <t> -- cmd (dashDashIndex can be 0 with tags)
   const dashDashIndex = cleanArgs.indexOf("--");
-  if (dashDashIndex > 0) {
+  if (dashDashIndex > 0 || (dashDashIndex === 0 && options.tags?.length)) {
     const noMask = cleanArgs.includes("--no-mask");
     const secretNames = cleanArgs
       .slice(0, dashDashIndex)
@@ -140,7 +162,7 @@ async function main() {
       process.exit(1);
     }
 
-    await exec(secretNames, cmdArgs, { noMask, env, global });
+    await exec(secretNames, cmdArgs, { noMask, env, global, tags: options.tags });
     return;
   }
 
@@ -245,6 +267,14 @@ async function main() {
       await installHook(cleanArgs.slice(1), options);
       break;
 
+    case "tag":
+      await tag(cleanArgs.slice(1), options);
+      break;
+
+    case "untag":
+      await untag(cleanArgs.slice(1), options);
+      break;
+
     case "run": {
       const runNoMask = cleanArgs.includes("--no-mask");
       const runCmdArgs = cleanArgs.slice(1).filter((a) => a !== "--no-mask");
@@ -259,7 +289,7 @@ async function main() {
         process.exit(1);
       }
 
-      await run(runCmdArgs, { noMask: runNoMask, env, global });
+      await run(runCmdArgs, { noMask: runNoMask, env, global, tags: options.tags });
       break;
     }
 

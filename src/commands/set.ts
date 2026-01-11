@@ -41,12 +41,13 @@ export async function set(name: string, options: SetOptions = {}): Promise<void>
   }
 
   const vault = await getUnlockedVault(options);
-  await vault.setSecret(name, value);
+  await vault.setSecret(name, value, options.tags);
   vault.close();
 
   if (options.json) {
-    console.log(JSON.stringify({ success: true, name }));
+    console.log(JSON.stringify({ success: true, name, tags: options.tags || [] }));
   } else if (!options.quiet) {
-    console.log(chalk.green("✓"), `Secret ${chalk.bold(name)} saved`);
+    const tagMsg = options.tags?.length ? ` with tags: ${options.tags.join(", ")}` : "";
+    console.log(chalk.green("✓"), `Secret ${chalk.bold(name)} saved${tagMsg}`);
   }
 }

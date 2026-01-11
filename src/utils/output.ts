@@ -5,6 +5,7 @@ export interface OutputOptions {
   quiet?: boolean;
   env?: string;
   global?: boolean;
+  tags?: string[];
 }
 
 // Success indicators

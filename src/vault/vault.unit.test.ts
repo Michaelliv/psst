@@ -416,6 +416,187 @@ describe("Vault unit tests", () => {
     });
   });
 
+  describe("tags", () => {
+    it("sets secret with tags", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("API_KEY", "value", ["aws", "prod"]);
+      const tags = vault.getTags("API_KEY");
+
+      vault.close();
+
+      expect(tags).toEqual(["aws", "prod"]);
+    });
+
+    it("sets secret without tags defaults to empty array", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("API_KEY", "value");
+      const tags = vault.getTags("API_KEY");
+
+      vault.close();
+
+      expect(tags).toEqual([]);
+    });
+
+    it("getTags returns empty array for non-existent secret", () => {
+      const vault = new Vault(vaultPath);
+      const tags = vault.getTags("NONEXISTENT");
+      vault.close();
+
+      expect(tags).toEqual([]);
+    });
+
+    it("setTags replaces all tags", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value", ["old"]);
+      vault.setTags("KEY", ["new1", "new2"]);
+      const tags = vault.getTags("KEY");
+
+      vault.close();
+
+      expect(tags).toEqual(["new1", "new2"]);
+    });
+
+    it("setTags returns false for non-existent secret", () => {
+      const vault = new Vault(vaultPath);
+      const result = vault.setTags("NONEXISTENT", ["tag"]);
+      vault.close();
+
+      expect(result).toBe(false);
+    });
+
+    it("addTags adds to existing tags", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value", ["existing"]);
+      vault.addTags("KEY", ["new"]);
+      const tags = vault.getTags("KEY");
+
+      vault.close();
+
+      expect(tags).toContain("existing");
+      expect(tags).toContain("new");
+    });
+
+    it("addTags deduplicates tags", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value", ["tag1"]);
+      vault.addTags("KEY", ["tag1", "tag2"]);
+      const tags = vault.getTags("KEY");
+
+      vault.close();
+
+      expect(tags).toEqual(["tag1", "tag2"]);
+    });
+
+    it("removeTags removes specified tags", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value", ["keep", "remove"]);
+      vault.removeTags("KEY", ["remove"]);
+      const tags = vault.getTags("KEY");
+
+      vault.close();
+
+      expect(tags).toEqual(["keep"]);
+    });
+
+    it("removeTags handles non-existent tags gracefully", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value", ["existing"]);
+      vault.removeTags("KEY", ["nonexistent"]);
+      const tags = vault.getTags("KEY");
+
+      vault.close();
+
+      expect(tags).toEqual(["existing"]);
+    });
+
+    it("listSecrets returns tags in metadata", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value", ["tag1", "tag2"]);
+      const secrets = vault.listSecrets();
+
+      vault.close();
+
+      expect(secrets[0].tags).toEqual(["tag1", "tag2"]);
+    });
+
+    it("listSecrets filters by tag", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("AWS_KEY", "aws", ["aws", "prod"]);
+      await vault.setSecret("STRIPE_KEY", "stripe", ["payments"]);
+      await vault.setSecret("DB_KEY", "db", ["prod"]);
+
+      const awsSecrets = vault.listSecrets(["aws"]);
+      const prodSecrets = vault.listSecrets(["prod"]);
+      const paymentSecrets = vault.listSecrets(["payments"]);
+
+      vault.close();
+
+      expect(awsSecrets.map(s => s.name)).toEqual(["AWS_KEY"]);
+      expect(prodSecrets.map(s => s.name)).toEqual(["AWS_KEY", "DB_KEY"]);
+      expect(paymentSecrets.map(s => s.name)).toEqual(["STRIPE_KEY"]);
+    });
+
+    it("listSecrets with multiple filter tags uses OR logic", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("AWS_KEY", "aws", ["aws"]);
+      await vault.setSecret("STRIPE_KEY", "stripe", ["payments"]);
+      await vault.setSecret("OTHER_KEY", "other", ["other"]);
+
+      const secrets = vault.listSecrets(["aws", "payments"]);
+
+      vault.close();
+
+      expect(secrets.length).toBe(2);
+      expect(secrets.map(s => s.name)).toContain("AWS_KEY");
+      expect(secrets.map(s => s.name)).toContain("STRIPE_KEY");
+    });
+
+    it("listSecrets with no matching tags returns empty", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value", ["tag"]);
+      const secrets = vault.listSecrets(["nonexistent"]);
+
+      vault.close();
+
+      expect(secrets).toEqual([]);
+    });
+
+    it("tags persist across vault instances", async () => {
+      const vault1 = new Vault(vaultPath);
+      await vault1.unlock();
+      await vault1.setSecret("KEY", "value", ["persistent"]);
+      vault1.close();
+
+      const vault2 = new Vault(vaultPath);
+      const tags = vault2.getTags("KEY");
+      vault2.close();
+
+      expect(tags).toEqual(["persistent"]);
+    });
+  });
+
   describe("persistence", () => {
     it("persists secrets across vault instances", async () => {
       // First instance - write

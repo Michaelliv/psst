@@ -11,12 +11,14 @@ const DB_NAME = "vault.db";
 export interface Secret {
   name: string;
   value: string;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
 
 export interface SecretMeta {
   name: string;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -43,6 +45,13 @@ export class Vault {
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migration: add tags column if it doesn't exist
+    const columns = this.db.query("PRAGMA table_info(secrets)").all() as { name: string }[];
+    const hasTagsColumn = columns.some((col) => col.name === "tags");
+    if (!hasTagsColumn) {
+      this.db.run("ALTER TABLE secrets ADD COLUMN tags TEXT DEFAULT '[]'");
+    }
   }
 
   /**
@@ -70,19 +79,21 @@ export class Vault {
     return this.key !== null;
   }
 
-  async setSecret(name: string, value: string): Promise<void> {
+  async setSecret(name: string, value: string, tags?: string[]): Promise<void> {
     if (!this.key) throw new Error("Vault is locked");
 
     const { encrypted, iv } = await encrypt(value, this.key);
+    const tagsJson = JSON.stringify(tags || []);
 
     this.db.run(
-      `INSERT INTO secrets (name, encrypted_value, iv, updated_at)
-       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      `INSERT INTO secrets (name, encrypted_value, iv, tags, updated_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(name) DO UPDATE SET
          encrypted_value = excluded.encrypted_value,
          iv = excluded.iv,
+         tags = excluded.tags,
          updated_at = CURRENT_TIMESTAMP`,
-      [name, encrypted, iv]
+      [name, encrypted, iv, tagsJson]
     );
   }
 
@@ -111,12 +122,53 @@ export class Vault {
     return result;
   }
 
-  listSecrets(): SecretMeta[] {
+  listSecrets(filterTags?: string[]): SecretMeta[] {
     const rows = this.db
-      .query("SELECT name, created_at, updated_at FROM secrets ORDER BY name")
-      .all() as SecretMeta[];
+      .query("SELECT name, tags, created_at, updated_at FROM secrets ORDER BY name")
+      .all() as { name: string; tags: string; created_at: string; updated_at: string }[];
 
-    return rows;
+    const secrets = rows.map((row) => ({
+      name: row.name,
+      tags: JSON.parse(row.tags || "[]") as string[],
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }));
+
+    // Filter by tags if specified (OR logic - any matching tag)
+    if (filterTags && filterTags.length > 0) {
+      return secrets.filter((s) => s.tags.some((t) => filterTags.includes(t)));
+    }
+
+    return secrets;
+  }
+
+  getTags(name: string): string[] {
+    const row = this.db
+      .query("SELECT tags FROM secrets WHERE name = ?")
+      .get(name) as { tags: string } | null;
+
+    if (!row) return [];
+    return JSON.parse(row.tags || "[]");
+  }
+
+  setTags(name: string, tags: string[]): boolean {
+    const result = this.db.run(
+      "UPDATE secrets SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
+      [JSON.stringify(tags), name]
+    );
+    return result.changes > 0;
+  }
+
+  addTags(name: string, newTags: string[]): boolean {
+    const existing = this.getTags(name);
+    const merged = [...new Set([...existing, ...newTags])];
+    return this.setTags(name, merged);
+  }
+
+  removeTags(name: string, tagsToRemove: string[]): boolean {
+    const existing = this.getTags(name);
+    const filtered = existing.filter((t) => !tagsToRemove.includes(t));
+    return this.setTags(name, filtered);
   }
 
   removeSecret(name: string): boolean {

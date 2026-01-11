@@ -7,6 +7,7 @@ interface ExecOptions {
   noMask?: boolean;
   env?: string;
   global?: boolean;
+  tags?: string[];
 }
 
 export async function exec(
@@ -35,27 +36,49 @@ export async function exec(
     process.exit(EXIT_AUTH_FAILED);
   }
 
-  // Get all requested secrets
-  const secrets = await vault.getSecrets(secretNames);
-  vault.close();
+  // Get secrets - either by name or by tag
+  const secrets = new Map<string, string>();
 
-  // Check for missing secrets, fallback to env vars
-  const missing: string[] = [];
-  for (const name of secretNames) {
-    if (!secrets.has(name)) {
-      // Fallback to environment variable
-      if (process.env[name]) {
-        secrets.set(name, process.env[name]!);
-      } else {
-        missing.push(name);
+  if (options.tags?.length && secretNames.length === 0) {
+    // Tag-based selection: get all secrets with matching tags
+    const secretMetas = vault.listSecrets(options.tags);
+    for (const meta of secretMetas) {
+      const value = await vault.getSecret(meta.name);
+      if (value !== null) {
+        secrets.set(meta.name, value);
       }
     }
-  }
+    vault.close();
 
-  if (missing.length > 0) {
-    console.error(chalk.red("✗"), `Missing secrets: ${chalk.bold(missing.join(", "))}`);
-    console.log(chalk.dim("  Add with: psst set <NAME>"));
-    process.exit(EXIT_USER_ERROR);
+    if (secrets.size === 0) {
+      console.error(chalk.yellow("⚠"), `No secrets with tags: ${options.tags.join(", ")}`);
+      console.log(chalk.dim("  Add tags with: psst tag <NAME> <tag>"));
+    }
+  } else {
+    // Name-based selection
+    const namedSecrets = await vault.getSecrets(secretNames);
+    vault.close();
+
+    // Check for missing secrets, fallback to env vars
+    const missing: string[] = [];
+    for (const name of secretNames) {
+      if (!namedSecrets.has(name)) {
+        // Fallback to environment variable
+        if (process.env[name]) {
+          secrets.set(name, process.env[name]!);
+        } else {
+          missing.push(name);
+        }
+      } else {
+        secrets.set(name, namedSecrets.get(name)!);
+      }
+    }
+
+    if (missing.length > 0) {
+      console.error(chalk.red("✗"), `Missing secrets: ${chalk.bold(missing.join(", "))}`);
+      console.log(chalk.dim("  Add with: psst set <NAME>"));
+      process.exit(EXIT_USER_ERROR);
+    }
   }
 
   // Build environment with secrets
