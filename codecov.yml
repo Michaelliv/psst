@@ -1,0 +1,16 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5%
+    patch:
+      default:
+        target: auto
+
+ignore:
+  - "src/vault/keychain.ts"      # OS keychain system calls
+  - "src/utils/input.ts"         # stdin/TTY handling
+  - "src/commands/common.ts"     # process.exit wrapper
+  - "src/commands/exec.ts"       # process spawning (except maskSecrets)
+  - "src/main.ts"                # CLI entry point
