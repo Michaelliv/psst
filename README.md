@@ -135,6 +135,7 @@ All commands support:
 ```bash
 -g, --global                  # Use global vault (~/.psst/)
 --env <name>                  # Use specific environment
+--tag <name>                  # Filter by tag (repeatable)
 --json                        # Structured JSON output
 -q, --quiet                   # Suppress output, use exit codes
 ```
@@ -188,6 +189,30 @@ PSST_SKIP_SCAN=1 git commit -m "message"
 # or
 git commit --no-verify
 ```
+
+### Secret Tags
+
+Organize secrets with tags for easier management:
+
+```bash
+# Add tags when setting secrets
+psst set AWS_KEY --tag aws --tag prod
+psst set STRIPE_KEY --tag payments --tag prod
+
+# Manage tags on existing secrets
+psst tag DB_URL prod                  # Add tag
+psst untag DB_URL dev                 # Remove tag
+
+# List secrets filtered by tag
+psst list --tag aws                   # Only aws-tagged secrets
+psst list --tag prod                  # Only prod-tagged secrets
+
+# Run commands with tagged secrets only
+psst --tag aws -- aws s3 ls           # Inject only aws-tagged secrets
+psst --tag prod run ./deploy.sh       # Run with only prod secrets
+```
+
+Tags use OR logic when filtering — `psst list --tag aws --tag payments` returns secrets with either tag.
 
 ---
 
