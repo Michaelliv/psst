@@ -1,6 +1,6 @@
 # psst 🤫
 
-[![CI](https://img.shields.io/github/actions/workflow/status/Michaelliv/psst/ci.yml?style=flat&label=tests)](https://github.com/Michaelliv/psst/actions/workflows/ci.yml) [![codecov](https://img.shields.io/codecov/c/github/Michaelliv/psst?style=flat)](https://codecov.io/gh/Michaelliv/psst) [![License](https://img.shields.io/github/license/Michaelliv/psst?style=flat)](https://opensource.org/licenses/MIT)
+[![Tests](https://img.shields.io/github/actions/workflow/status/Michaelliv/psst/ci.yml?label=Tests&color=brightgreen)](https://github.com/Michaelliv/psst/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/codecov/c/github/Michaelliv/psst?label=Coverage&color=blue)](https://codecov.io/gh/Michaelliv/psst) [![License](https://img.shields.io/badge/License-MIT-yellow)](https://opensource.org/licenses/MIT)
 
 **Because your agent doesn't need to know your secrets.**
 
