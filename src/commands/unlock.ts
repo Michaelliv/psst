@@ -14,40 +14,31 @@ const DB_NAME = "vault.db";
 const LOCKED_NAME = "vault.db.locked";
 
 export async function unlock(options: OutputOptions = {}): Promise<void> {
-  let checkPath = Vault.findVaultPath(options.env);
+  const scope = options.global ? "global" : "local";
 
-  // Look for locked vault even if no unlocked vault exists
+  // Look for vault (unlocked or locked) in specified scope only - no fallback
+  let checkPath = Vault.findVaultPath({ global: options.global, env: options.env });
+
+  // If no unlocked vault found, look for locked vault in same scope
   if (!checkPath) {
-    if (options.env) {
-      // Check env-specific paths for locked vault
-      const globalEnvPath = join(homedir(), ".psst", "envs", options.env);
-      const localEnvPath = join(process.cwd(), ".psst", "envs", options.env);
+    const basePath = options.global
+      ? join(homedir(), ".psst")
+      : join(process.cwd(), ".psst");
 
-      if (existsSync(join(localEnvPath, LOCKED_NAME))) {
-        checkPath = localEnvPath;
-      } else if (existsSync(join(globalEnvPath, LOCKED_NAME))) {
-        checkPath = globalEnvPath;
+    if (options.env) {
+      // Check env-specific path for locked vault
+      const envPath = join(basePath, "envs", options.env);
+      if (existsSync(join(envPath, LOCKED_NAME))) {
+        checkPath = envPath;
       }
     } else {
-      // Check legacy paths for locked vault
-      const globalPath = join(homedir(), ".psst");
-      const localPath = join(process.cwd(), ".psst");
-
-      if (existsSync(join(localPath, LOCKED_NAME))) {
-        checkPath = localPath;
-      } else if (existsSync(join(globalPath, LOCKED_NAME))) {
-        checkPath = globalPath;
-      }
-
-      // Also check default env paths
-      if (!checkPath) {
-        const globalDefaultEnv = join(homedir(), ".psst", "envs", "default");
-        const localDefaultEnv = join(process.cwd(), ".psst", "envs", "default");
-
-        if (existsSync(join(localDefaultEnv, LOCKED_NAME))) {
-          checkPath = localDefaultEnv;
-        } else if (existsSync(join(globalDefaultEnv, LOCKED_NAME))) {
-          checkPath = globalDefaultEnv;
+      // Check legacy path first, then default env
+      if (existsSync(join(basePath, LOCKED_NAME))) {
+        checkPath = basePath;
+      } else {
+        const defaultEnvPath = join(basePath, "envs", "default");
+        if (existsSync(join(defaultEnvPath, LOCKED_NAME))) {
+          checkPath = defaultEnvPath;
         }
       }
     }
@@ -55,11 +46,13 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
 
   if (!checkPath) {
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "no_vault", env: options.env || "default" }));
+      console.log(JSON.stringify({ success: false, error: "no_vault", scope, env: options.env || "default" }));
     } else if (!options.quiet) {
       const envMsg = options.env ? ` for environment "${options.env}"` : "";
-      console.error(chalk.red("✗"), `No vault found${envMsg}`);
-      console.log(chalk.dim(`  Run: psst init${options.env ? ` --env ${options.env}` : ""}`));
+      console.error(chalk.red("✗"), `No ${scope} vault found${envMsg}`);
+      const globalFlag = options.global ? " --global" : "";
+      const envFlag = options.env ? ` --env ${options.env}` : "";
+      console.log(chalk.dim(`  Run: psst init${globalFlag}${envFlag}`));
     }
     process.exit(EXIT_NO_VAULT);
   }

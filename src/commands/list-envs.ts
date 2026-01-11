@@ -28,7 +28,7 @@ export async function listEnvs(options: OutputOptions = {}): Promise<void> {
     console.log();
     console.log(chalk.dim("No environments found."));
     console.log();
-    console.log("Create one with", chalk.cyan("psst init --env <name>"));
+    console.log("Create one with", chalk.cyan("psst init"), "(local) or", chalk.cyan("psst init --global"), "(global)");
     console.log();
     return;
   }

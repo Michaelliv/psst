@@ -4,6 +4,7 @@ export interface OutputOptions {
   json?: boolean;
   quiet?: boolean;
   env?: string;
+  global?: boolean;
 }
 
 // Success indicators

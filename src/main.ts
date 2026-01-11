@@ -19,7 +19,8 @@ const HELP = `
 psst - AI-native secrets manager
 
 VAULT MANAGEMENT
-  psst init                     Create vault (~/.psst or .psst/)
+  psst init                     Create local vault (.psst/)
+  psst init --global            Create global vault (~/.psst/)
   psst init --env <name>        Create vault for specific environment
   psst onboard                  Add psst instructions to CLAUDE.md/AGENTS.md
   psst lock                     Lock vault (encrypt at rest)
@@ -48,19 +49,24 @@ OPTIONS
   --no-mask                       Disable output masking (for debugging)
 
 GLOBAL FLAGS
+  -g, --global                  Use global vault (~/.psst/) instead of local
   --env <name>                  Use specific environment (default: "default")
   --json                        Output as JSON
   -q, --quiet                   Suppress output, use exit codes
 
-ENVIRONMENT VARIABLE
+ENVIRONMENT VARIABLES
+  PSST_GLOBAL                   Alternative to --global flag (set to "1" or "true")
   PSST_ENV                      Alternative to --env flag
 
 EXAMPLES
+  psst init                                               # Create local vault
+  psst init --global                                      # Create global vault
   psst set STRIPE_KEY
   psst list
-  psst run ./deploy.sh                                     # All secrets injected
+  psst run ./deploy.sh                                    # All secrets injected
   psst STRIPE_KEY -- curl -H "Authorization: $STRIPE_KEY" https://api.stripe.com
-  psst --env prod run ./deploy.sh                          # Use prod environment
+  psst --env prod run ./deploy.sh                         # Use prod environment
+  psst --global list                                      # List from global vault
 `;
 
 async function main() {
@@ -69,6 +75,12 @@ async function main() {
   // Parse global flags
   const json = args.includes("--json");
   const quiet = args.includes("--quiet") || args.includes("-q");
+
+  // Parse --global flag or fallback to PSST_GLOBAL
+  let global = args.includes("--global") || args.includes("-g");
+  if (!global && process.env.PSST_GLOBAL) {
+    global = process.env.PSST_GLOBAL === "1" || process.env.PSST_GLOBAL.toLowerCase() === "true";
+  }
 
   // Parse --env flag or fallback to PSST_ENV
   let env: string | undefined;
@@ -79,11 +91,12 @@ async function main() {
     env = process.env.PSST_ENV;
   }
 
-  const options = { json, quiet, env };
+  const options = { json, quiet, env, global };
 
   // Remove global flags from args for command processing
   const cleanArgs = args.filter((a, i) => {
     if (a === "--json" || a === "--quiet" || a === "-q") return false;
+    if (a === "--global" || a === "-g") return false;
     if (a === "--env") return false;
     if (i > 0 && args[i - 1] === "--env") return false;
     return true;
@@ -119,7 +132,7 @@ async function main() {
       process.exit(1);
     }
 
-    await exec(secretNames, cmdArgs, { noMask, env });
+    await exec(secretNames, cmdArgs, { noMask, env, global });
     return;
   }
 
@@ -230,7 +243,7 @@ async function main() {
         process.exit(1);
       }
 
-      await run(runCmdArgs, { noMask: runNoMask, env });
+      await run(runCmdArgs, { noMask: runNoMask, env, global });
       break;
     }
 

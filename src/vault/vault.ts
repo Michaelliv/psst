@@ -170,53 +170,39 @@ export class Vault {
     return { success: true };
   }
 
-  static findVaultPath(env?: string): string | null {
-    // If env specified, look for env-specific vault
+  static findVaultPath(options: { global?: boolean; env?: string } = {}): string | null {
+    const { global = false, env } = options;
+
+    // Determine base path based on scope (no fallback between local and global)
+    const basePath = global
+      ? join(homedir(), VAULT_DIR_NAME)
+      : join(process.cwd(), VAULT_DIR_NAME);
+
+    // If env specified, look for env-specific vault only
     if (env) {
-      // Check local env path first
-      const localEnvPath = join(process.cwd(), VAULT_DIR_NAME, "envs", env);
-      if (existsSync(join(localEnvPath, DB_NAME))) {
-        return localEnvPath;
+      const envPath = join(basePath, "envs", env);
+      if (existsSync(join(envPath, DB_NAME))) {
+        return envPath;
       }
-
-      // Check global env path
-      const globalEnvPath = join(homedir(), VAULT_DIR_NAME, "envs", env);
-      if (existsSync(join(globalEnvPath, DB_NAME))) {
-        return globalEnvPath;
-      }
-
       return null;
     }
 
-    // No env specified: check legacy paths first, then default env
-    // Check local .psst/ first (legacy)
-    const localPath = join(process.cwd(), VAULT_DIR_NAME);
-    if (existsSync(join(localPath, DB_NAME))) {
-      return localPath;
+    // No env specified: check legacy path first, then default env
+    // Legacy: .psst/vault.db (no envs folder)
+    if (existsSync(join(basePath, DB_NAME))) {
+      return basePath;
     }
 
-    // Check global ~/.psst/ (legacy)
-    const globalPath = join(homedir(), VAULT_DIR_NAME);
-    if (existsSync(join(globalPath, DB_NAME))) {
-      return globalPath;
-    }
-
-    // Check local default env
-    const localDefaultEnv = join(process.cwd(), VAULT_DIR_NAME, "envs", "default");
-    if (existsSync(join(localDefaultEnv, DB_NAME))) {
-      return localDefaultEnv;
-    }
-
-    // Check global default env
-    const globalDefaultEnv = join(homedir(), VAULT_DIR_NAME, "envs", "default");
-    if (existsSync(join(globalDefaultEnv, DB_NAME))) {
-      return globalDefaultEnv;
+    // Default env: .psst/envs/default/vault.db
+    const defaultEnvPath = join(basePath, "envs", "default");
+    if (existsSync(join(defaultEnvPath, DB_NAME))) {
+      return defaultEnvPath;
     }
 
     return null;
   }
 
-  static getVaultPath(global: boolean = true, env?: string): string {
+  static getVaultPath(global: boolean = false, env?: string): string {
     const basePath = global
       ? join(homedir(), VAULT_DIR_NAME)
       : join(process.cwd(), VAULT_DIR_NAME);
@@ -228,7 +214,7 @@ export class Vault {
     return basePath;
   }
 
-  static listEnvironments(global: boolean = true): string[] {
+  static listEnvironments(global: boolean = false): string[] {
     const basePath = global
       ? join(homedir(), VAULT_DIR_NAME)
       : join(process.cwd(), VAULT_DIR_NAME);

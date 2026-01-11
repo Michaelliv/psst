@@ -13,15 +13,18 @@ const DB_NAME = "vault.db";
 const LOCKED_NAME = "vault.db.locked";
 
 export async function lock(options: OutputOptions = {}): Promise<void> {
-  const vaultPath = Vault.findVaultPath(options.env);
+  const vaultPath = Vault.findVaultPath({ global: options.global, env: options.env });
 
   if (!vaultPath) {
+    const scope = options.global ? "global" : "local";
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "no_vault", env: options.env || "default" }));
+      console.log(JSON.stringify({ success: false, error: "no_vault", scope, env: options.env || "default" }));
     } else if (!options.quiet) {
       const envMsg = options.env ? ` for environment "${options.env}"` : "";
-      console.error(chalk.red("✗"), `No vault found${envMsg}`);
-      console.log(chalk.dim(`  Run: psst init${options.env ? ` --env ${options.env}` : ""}`));
+      console.error(chalk.red("✗"), `No ${scope} vault found${envMsg}`);
+      const globalFlag = options.global ? " --global" : "";
+      const envFlag = options.env ? ` --env ${options.env}` : "";
+      console.log(chalk.dim(`  Run: psst init${globalFlag}${envFlag}`));
     }
     process.exit(EXIT_NO_VAULT);
   }
