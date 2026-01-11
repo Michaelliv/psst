@@ -1,5 +1,11 @@
 # psst 🤫
 
+[![CI](https://github.com/Michaelliv/psst/actions/workflows/ci.yml/badge.svg)](https://github.com/Michaelliv/psst/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Michaelliv/psst/graph/badge.svg)](https://codecov.io/gh/Michaelliv/psst)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Bun](https://img.shields.io/badge/Bun-%23000000.svg?logo=bun&logoColor=white)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+
 **Because your agent doesn't need to know your secrets.**
 
 ---
