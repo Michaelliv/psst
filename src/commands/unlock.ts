@@ -5,7 +5,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { Vault } from "../vault/vault";
 import { decryptFile } from "../vault/crypto";
-import { storeKey, generateKey } from "../vault/keychain";
+import { storeKey } from "../vault/keychain";
 import { readPassword } from "../utils/input";
 import { EXIT_USER_ERROR, EXIT_AUTH_FAILED, EXIT_NO_VAULT, EXIT_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
@@ -113,11 +113,17 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
       process.exit(EXIT_AUTH_FAILED);
     }
 
-    await Bun.write(dbPath, decrypted);
+    // Extract key from decrypted data
+    // Format: [key_length (4 bytes)] [key] [vault.db]
+    const keyLength = decrypted.readUInt32LE(0);
+    const vaultKey = decrypted.subarray(4, 4 + keyLength).toString("utf-8");
+    const dbData = decrypted.subarray(4 + keyLength);
+
+    await Bun.write(dbPath, dbData);
     unlinkSync(lockedPath);
 
-    const key = generateKey();
-    await storeKey(key);
+    // Restore the original key to keychain
+    await storeKey(vaultKey);
 
     if (options.json) {
       console.log(JSON.stringify({ success: true }));

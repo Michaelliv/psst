@@ -4,7 +4,7 @@ import { existsSync, unlinkSync } from "fs";
 import { join } from "path";
 import { Vault } from "../vault/vault";
 import { encryptFile } from "../vault/crypto";
-import { deleteKey } from "../vault/keychain";
+import { deleteKey, getKey } from "../vault/keychain";
 import { readPassword } from "../utils/input";
 import { EXIT_USER_ERROR, EXIT_LOCKED, EXIT_NO_VAULT, EXIT_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
@@ -60,8 +60,31 @@ export async function lock(options: OutputOptions = {}): Promise<void> {
   const spinner = useSpinner ? ora("Encrypting vault...").start() : null;
 
   try {
+    // Get the current keychain key to preserve it
+    const keyResult = await getKey();
+    const vaultKey = keyResult.key || process.env.PSST_PASSWORD || "";
+
+    if (!vaultKey) {
+      if (options.json) {
+        console.log(JSON.stringify({ success: false, error: "no_key" }));
+      } else {
+        spinner?.fail("No vault key found");
+        if (!options.quiet) {
+          console.error(chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"));
+        }
+      }
+      process.exit(EXIT_ERROR);
+    }
+
+    // Format: [key_length (4 bytes)] [key] [vault.db]
+    const keyBuffer = Buffer.from(vaultKey, "utf-8");
+    const keyLengthBuffer = Buffer.alloc(4);
+    keyLengthBuffer.writeUInt32LE(keyBuffer.length, 0);
+
     const dbData = await Bun.file(dbPath).arrayBuffer();
-    const encrypted = await encryptFile(Buffer.from(dbData), password);
+    const combined = Buffer.concat([keyLengthBuffer, keyBuffer, Buffer.from(dbData)]);
+
+    const encrypted = await encryptFile(combined, password);
     await Bun.write(lockedPath, encrypted);
     unlinkSync(dbPath);
     await deleteKey();
