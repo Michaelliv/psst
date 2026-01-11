@@ -7,6 +7,7 @@ import { get } from "./commands/get";
 import { list } from "./commands/list";
 import { rm } from "./commands/rm";
 import { exec } from "./commands/exec";
+import { run } from "./commands/run";
 import { onboard } from "./commands/onboard";
 import { importSecrets } from "./commands/import";
 import { exportSecrets } from "./commands/export";
@@ -40,8 +41,11 @@ IMPORT/EXPORT
   psst export --env-file <f>    Export secrets to file
 
 AGENT EXECUTION
-  psst <NAME> [NAME...] -- <cmd>   Inject secrets and run command
-  psst --no-mask <NAME> -- <cmd>   Disable output masking (for debugging)
+  psst run <command>              Run command with ALL secrets injected
+  psst <NAME> [NAME...] -- <cmd>  Inject specific secrets and run command
+
+OPTIONS
+  --no-mask                       Disable output masking (for debugging)
 
 GLOBAL FLAGS
   --env <name>                  Use specific environment (default: "default")
@@ -54,11 +58,9 @@ ENVIRONMENT VARIABLE
 EXAMPLES
   psst set STRIPE_KEY
   psst list
-  psst --env prod set API_KEY
-  psst --env prod list
-  PSST_ENV=prod psst list
-  psst STRIPE_KEY -- curl -H "Authorization: Bearer $STRIPE_KEY" https://api.stripe.com
-  psst --env prod API_KEY -- curl https://api.example.com
+  psst run ./deploy.sh                                     # All secrets injected
+  psst STRIPE_KEY -- curl -H "Authorization: $STRIPE_KEY" https://api.stripe.com
+  psst --env prod run ./deploy.sh                          # Use prod environment
 `;
 
 async function main() {
@@ -213,6 +215,24 @@ async function main() {
     case "unlock":
       await unlock(options);
       break;
+
+    case "run": {
+      const runNoMask = cleanArgs.includes("--no-mask");
+      const runCmdArgs = cleanArgs.slice(1).filter((a) => a !== "--no-mask");
+
+      if (runCmdArgs.length === 0) {
+        if (json) {
+          console.log(JSON.stringify({ success: false, error: "missing_command" }));
+        } else if (!quiet) {
+          console.error("Error: Command required");
+          console.error("Usage: psst run <command>");
+        }
+        process.exit(1);
+      }
+
+      await run(runCmdArgs, { noMask: runNoMask, env });
+      break;
+    }
 
     default:
       if (json) {

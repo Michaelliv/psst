@@ -302,6 +302,31 @@ describe("Environment support integration tests", () => {
     });
   });
 
+  describe("run command", () => {
+    it("injects all secrets into command environment", async () => {
+      await runPsst(["init", "--local"]);
+
+      // Set multiple secrets
+      await runPsst(["set", "SECRET_A", "value-a"]);
+      await runPsst(["set", "SECRET_B", "value-b"]);
+
+      // Run command with all secrets (use --no-mask to see values)
+      const result = await runPsst(["run", "--no-mask", "echo", "$SECRET_A:$SECRET_B"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe("value-a:value-b");
+    });
+
+    it("masks secrets in output by default", async () => {
+      await runPsst(["init", "--local"]);
+      await runPsst(["set", "MY_SECRET", "super-secret-value"]);
+
+      const result = await runPsst(["run", "echo", "$MY_SECRET"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("[REDACTED]");
+      expect(result.stdout).not.toContain("super-secret-value");
+    });
+  });
+
   describe("set command", () => {
     it("sets secret with value as argument (#15)", async () => {
       await runPsst(["init", "--local"]);
