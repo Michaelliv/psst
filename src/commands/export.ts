@@ -53,7 +53,7 @@ export async function exportSecrets(options: ExportOptions = {}): Promise<void> 
   }
 }
 
-function escapeEnvValue(value: string): string {
+export function escapeEnvValue(value: string): string {
   if (
     value.includes(" ") ||
     value.includes('"') ||

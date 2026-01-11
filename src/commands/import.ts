@@ -96,7 +96,7 @@ export async function importSecrets(
   }
 }
 
-function parseEnvContent(content: string): [string, string][] {
+export function parseEnvContent(content: string): [string, string][] {
   const entries: [string, string][] = [];
 
   for (const line of content.split("\n")) {
@@ -129,7 +129,7 @@ function parseEnvContent(content: string): [string, string][] {
   return entries;
 }
 
-function importFromEnv(pattern?: string): [string, string][] {
+export function importFromEnv(pattern?: string): [string, string][] {
   const entries: [string, string][] = [];
   const regex = pattern ? new RegExp(pattern) : null;
 

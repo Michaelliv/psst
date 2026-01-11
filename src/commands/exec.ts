@@ -98,7 +98,7 @@ export async function exec(
   });
 }
 
-function maskSecrets(text: string, secrets: string[]): string {
+export function maskSecrets(text: string, secrets: string[]): string {
   let masked = text;
   for (const secret of secrets) {
     // Use split/join for global replace (avoids regex escaping issues)

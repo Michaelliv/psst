@@ -6,6 +6,7 @@ import type { OutputOptions } from "../utils/output";
 
 interface SetOptions extends OutputOptions {
   stdin?: boolean;
+  value?: string;
 }
 
 export async function set(name: string, options: SetOptions = {}): Promise<void> {
@@ -22,7 +23,9 @@ export async function set(name: string, options: SetOptions = {}): Promise<void>
 
   let value: string;
 
-  if (options.stdin) {
+  if (options.value) {
+    value = options.value;
+  } else if (options.stdin) {
     value = (await readStdin()).trim();
   } else {
     value = await readSecretValue(`Enter value for ${chalk.bold(name)}: `);
