@@ -117,17 +117,36 @@ export async function getKey(): Promise<KeychainResult> {
     }
 
     if (process.platform === "win32") {
-      // Windows: Use PowerShell to retrieve from credential manager
+      // Windows: Use PowerShell with .NET P/Invoke to read from Credential Manager
+      // Note: 64-bit offsets - CredentialBlobSize at 32, CredentialBlob at 40
+      const psScript = `
+$sig = @'
+[DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+public static extern bool CredRead(string target, int type, int flags, out IntPtr credential);
+[DllImport("advapi32.dll")]
+public static extern void CredFree(IntPtr credential);
+'@
+Add-Type -MemberDefinition $sig -Namespace Win32 -Name Cred
+$ptr = [IntPtr]::Zero
+if ([Win32.Cred]::CredRead('${SERVICE_NAME}', 1, 0, [ref]$ptr)) {
+  $size = [Runtime.InteropServices.Marshal]::ReadInt32($ptr, 32)
+  $blob = [Runtime.InteropServices.Marshal]::ReadIntPtr($ptr, 40)
+  if ($size -gt 0 -and $blob -ne [IntPtr]::Zero) {
+    [Runtime.InteropServices.Marshal]::PtrToStringUni($blob, $size/2)
+  }
+  [Win32.Cred]::CredFree($ptr)
+} else { exit 1 }
+`;
       const result = await run([
         "powershell",
         "-Command",
-        `(Get-StoredCredential -Target '${SERVICE_NAME}').Password`,
+        psScript,
       ]);
 
       if (result.exitCode === 0 && result.stdout) {
         return { success: true, key: result.stdout };
       }
-      return { success: false, error: "Key not found" };
+      return { success: false, error: "Key not found in Credential Manager" };
     }
 
     return { success: false, error: `Unsupported platform: ${process.platform}` };
