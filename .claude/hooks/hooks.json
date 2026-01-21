@@ -1,0 +1,16 @@
+{
+  "description": "Reminds Claude to update the mental model before pushing code changes",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/pre-push-reminder.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
