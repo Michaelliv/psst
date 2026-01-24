@@ -16,6 +16,7 @@ import { unlock } from "./commands/unlock";
 import { listEnvs } from "./commands/list-envs";
 import { scan } from "./commands/scan";
 import { installHook } from "./commands/install-hook";
+import { installHooks } from "./commands/install-hooks";
 import { tag, untag } from "./commands/tag";
 
 const HELP = `
@@ -59,6 +60,10 @@ SECRET SCANNING
   psst scan --staged              Scan only git staged files
   psst scan --path <dir>          Scan specific directory
   psst install-hook               Install git pre-commit hook
+
+AGENT PROTECTION
+  psst install-hooks              Install Claude Code protection hooks
+  psst install-hooks --global     Install hooks globally (~/.claude/)
 
 OPTIONS
   --no-mask                       Disable output masking (for debugging)
@@ -265,6 +270,10 @@ async function main() {
 
     case "install-hook":
       await installHook(cleanArgs.slice(1), options);
+      break;
+
+    case "install-hooks":
+      await installHooks(cleanArgs.slice(1), options);
       break;
 
     case "tag":

@@ -6,7 +6,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-push-reminder.sh\""
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/psst-block.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/psst-scan.sh\""
           }
         ]
       }
