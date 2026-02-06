@@ -10,7 +10,9 @@ export interface KeychainResult {
 /**
  * Run a command and return stdout
  */
-async function run(cmd: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+async function run(
+  cmd: string[],
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawnSync(cmd);
 
   return {
@@ -31,9 +33,12 @@ export async function storeKey(key: string): Promise<KeychainResult> {
       const result = await run([
         "security",
         "add-generic-password",
-        "-s", SERVICE_NAME,
-        "-a", ACCOUNT_NAME,
-        "-w", key,
+        "-s",
+        SERVICE_NAME,
+        "-a",
+        ACCOUNT_NAME,
+        "-w",
+        key,
         "-U",
       ]);
 
@@ -46,8 +51,16 @@ export async function storeKey(key: string): Promise<KeychainResult> {
     if (process.platform === "linux") {
       // Linux: Use secret-tool (libsecret)
       const proc = Bun.spawn(
-        ["secret-tool", "store", "--label=psst vault key", "service", SERVICE_NAME, "account", ACCOUNT_NAME],
-        { stdin: "pipe" }
+        [
+          "secret-tool",
+          "store",
+          "--label=psst vault key",
+          "service",
+          SERVICE_NAME,
+          "account",
+          ACCOUNT_NAME,
+        ],
+        { stdin: "pipe" },
       );
       proc.stdin.write(key);
       proc.stdin.end();
@@ -74,7 +87,10 @@ export async function storeKey(key: string): Promise<KeychainResult> {
       return { success: false, error: result.stderr || "Failed to store key" };
     }
 
-    return { success: false, error: `Unsupported platform: ${process.platform}` };
+    return {
+      success: false,
+      error: `Unsupported platform: ${process.platform}`,
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || String(err) };
   }
@@ -90,8 +106,10 @@ export async function getKey(): Promise<KeychainResult> {
       const result = await run([
         "security",
         "find-generic-password",
-        "-s", SERVICE_NAME,
-        "-a", ACCOUNT_NAME,
+        "-s",
+        SERVICE_NAME,
+        "-a",
+        ACCOUNT_NAME,
         "-w",
       ]);
 
@@ -106,8 +124,10 @@ export async function getKey(): Promise<KeychainResult> {
       const result = await run([
         "secret-tool",
         "lookup",
-        "service", SERVICE_NAME,
-        "account", ACCOUNT_NAME,
+        "service",
+        SERVICE_NAME,
+        "account",
+        ACCOUNT_NAME,
       ]);
 
       if (result.exitCode === 0 && result.stdout) {
@@ -130,7 +150,10 @@ export async function getKey(): Promise<KeychainResult> {
       return { success: false, error: "Key not found" };
     }
 
-    return { success: false, error: `Unsupported platform: ${process.platform}` };
+    return {
+      success: false,
+      error: `Unsupported platform: ${process.platform}`,
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || String(err) };
   }
@@ -145,8 +168,10 @@ export async function deleteKey(): Promise<KeychainResult> {
       const result = await run([
         "security",
         "delete-generic-password",
-        "-s", SERVICE_NAME,
-        "-a", ACCOUNT_NAME,
+        "-s",
+        SERVICE_NAME,
+        "-a",
+        ACCOUNT_NAME,
       ]);
       return { success: result.exitCode === 0 };
     }
@@ -155,8 +180,10 @@ export async function deleteKey(): Promise<KeychainResult> {
       const result = await run([
         "secret-tool",
         "clear",
-        "service", SERVICE_NAME,
-        "account", ACCOUNT_NAME,
+        "service",
+        SERVICE_NAME,
+        "account",
+        ACCOUNT_NAME,
       ]);
       return { success: result.exitCode === 0 };
     }
@@ -166,7 +193,10 @@ export async function deleteKey(): Promise<KeychainResult> {
       return { success: result.exitCode === 0 };
     }
 
-    return { success: false, error: `Unsupported platform: ${process.platform}` };
+    return {
+      success: false,
+      error: `Unsupported platform: ${process.platform}`,
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || String(err) };
   }

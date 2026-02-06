@@ -1,10 +1,10 @@
+import { existsSync } from "node:fs";
 import chalk from "chalk";
 import ora from "ora";
-import { existsSync } from "fs";
-import { getUnlockedVault } from "./common";
-import { readStdin } from "../utils/input";
 import { EXIT_USER_ERROR } from "../utils/exit-codes";
+import { readStdin } from "../utils/input";
 import type { OutputOptions } from "../utils/output";
+import { getUnlockedVault } from "./common";
 
 interface ImportOptions extends OutputOptions {
   stdin?: boolean;
@@ -14,7 +14,7 @@ interface ImportOptions extends OutputOptions {
 
 export async function importSecrets(
   fileOrArgs: string[],
-  options: ImportOptions = {}
+  options: ImportOptions = {},
 ): Promise<void> {
   const vault = await getUnlockedVault(options);
 
@@ -40,7 +40,13 @@ export async function importSecrets(
 
     if (!existsSync(filePath)) {
       if (options.json) {
-        console.log(JSON.stringify({ success: false, error: "file_not_found", file: filePath }));
+        console.log(
+          JSON.stringify({
+            success: false,
+            error: "file_not_found",
+            file: filePath,
+          }),
+        );
       } else if (!options.quiet) {
         console.error(chalk.red("✗"), `File not found: ${filePath}`);
       }
@@ -88,7 +94,10 @@ export async function importSecrets(
 
   if (!options.quiet) {
     if (!useSpinner) {
-      console.log(chalk.green("✓"), `Imported ${chalk.bold(imported)} secret(s)`);
+      console.log(
+        chalk.green("✓"),
+        `Imported ${chalk.bold(imported)} secret(s)`,
+      );
     }
     if (skipped > 0) {
       console.log(chalk.dim(`  Skipped ${skipped} invalid entries`));

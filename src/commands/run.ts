@@ -1,7 +1,11 @@
+import { spawn } from "node:child_process";
 import chalk from "chalk";
+import {
+  EXIT_AUTH_FAILED,
+  EXIT_NO_VAULT,
+  EXIT_USER_ERROR,
+} from "../utils/exit-codes";
 import { Vault } from "../vault/vault";
-import { spawn } from "child_process";
-import { EXIT_NO_VAULT, EXIT_AUTH_FAILED, EXIT_USER_ERROR } from "../utils/exit-codes";
 import { maskSecrets } from "./exec";
 
 interface RunOptions {
@@ -16,9 +20,12 @@ interface RunOptions {
  */
 export async function run(
   cmdArgs: string[],
-  options: RunOptions = {}
+  options: RunOptions = {},
 ): Promise<void> {
-  const vaultPath = Vault.findVaultPath({ global: options.global, env: options.env });
+  const vaultPath = Vault.findVaultPath({
+    global: options.global,
+    env: options.env,
+  });
 
   if (!vaultPath) {
     const scope = options.global ? "global" : "local";
@@ -35,7 +42,9 @@ export async function run(
 
   if (!success) {
     console.error(chalk.red("✗"), "Failed to unlock vault");
-    console.log(chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"));
+    console.log(
+      chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"),
+    );
     process.exit(EXIT_AUTH_FAILED);
   }
 
@@ -53,7 +62,9 @@ export async function run(
   vault.close();
 
   if (secrets.size === 0) {
-    const tagMsg = options.tags?.length ? ` with tags: ${options.tags.join(", ")}` : "";
+    const tagMsg = options.tags?.length
+      ? ` with tags: ${options.tags.join(", ")}`
+      : "";
     console.error(chalk.yellow("⚠"), `No secrets in vault${tagMsg}`);
     console.log(chalk.dim("  Add secrets with: psst set <NAME>"));
   }

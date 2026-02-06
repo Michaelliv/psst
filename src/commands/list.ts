@@ -1,6 +1,6 @@
 import chalk from "chalk";
-import { getUnlockedVault } from "./common";
 import type { OutputOptions } from "../utils/output";
+import { getUnlockedVault } from "./common";
 
 export async function list(options: OutputOptions = {}): Promise<void> {
   const vault = await getUnlockedVault(options);
@@ -9,16 +9,22 @@ export async function list(options: OutputOptions = {}): Promise<void> {
 
   // JSON output
   if (options.json) {
-    console.log(JSON.stringify({
-      success: true,
-      filter: options.tags || null,
-      secrets: secrets.map((s) => ({
-        name: s.name,
-        tags: s.tags,
-        created_at: s.created_at,
-        updated_at: s.updated_at,
-      })),
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          success: true,
+          filter: options.tags || null,
+          secrets: secrets.map((s) => ({
+            name: s.name,
+            tags: s.tags,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+          })),
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
@@ -31,7 +37,9 @@ export async function list(options: OutputOptions = {}): Promise<void> {
   }
 
   // Human output
-  const filterMsg = options.tags?.length ? ` (filtered by: ${options.tags.join(", ")})` : "";
+  const filterMsg = options.tags?.length
+    ? ` (filtered by: ${options.tags.join(", ")})`
+    : "";
 
   if (secrets.length === 0) {
     console.log(chalk.dim(`\nNo secrets found${filterMsg}.\n`));
@@ -41,7 +49,8 @@ export async function list(options: OutputOptions = {}): Promise<void> {
 
   console.log(chalk.bold(`\nSecrets${filterMsg}\n`));
   for (const secret of secrets) {
-    const tagStr = secret.tags.length > 0 ? chalk.dim(` [${secret.tags.join(", ")}]`) : "";
+    const tagStr =
+      secret.tags.length > 0 ? chalk.dim(` [${secret.tags.join(", ")}]`) : "";
     console.log(chalk.green("●"), secret.name + tagStr);
   }
   console.log(chalk.dim(`\n${secrets.length} secret(s)\n`));

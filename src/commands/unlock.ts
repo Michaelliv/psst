@@ -1,14 +1,19 @@
+import { existsSync, unlinkSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import chalk from "chalk";
 import ora from "ora";
-import { existsSync, unlinkSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
-import { Vault } from "../vault/vault";
+import {
+  EXIT_AUTH_FAILED,
+  EXIT_ERROR,
+  EXIT_NO_VAULT,
+  EXIT_USER_ERROR,
+} from "../utils/exit-codes";
+import { readPassword } from "../utils/input";
+import type { OutputOptions } from "../utils/output";
 import { decryptFile } from "../vault/crypto";
 import { storeKey } from "../vault/keychain";
-import { readPassword } from "../utils/input";
-import { EXIT_USER_ERROR, EXIT_AUTH_FAILED, EXIT_NO_VAULT, EXIT_ERROR } from "../utils/exit-codes";
-import type { OutputOptions } from "../utils/output";
+import { Vault } from "../vault/vault";
 
 const DB_NAME = "vault.db";
 const LOCKED_NAME = "vault.db.locked";
@@ -17,7 +22,10 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
   const scope = options.global ? "global" : "local";
 
   // Look for vault (unlocked or locked) in specified scope only - no fallback
-  let checkPath = Vault.findVaultPath({ global: options.global, env: options.env });
+  let checkPath = Vault.findVaultPath({
+    global: options.global,
+    env: options.env,
+  });
 
   // If no unlocked vault found, look for locked vault in same scope
   if (!checkPath) {
@@ -46,7 +54,14 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
 
   if (!checkPath) {
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "no_vault", scope, env: options.env || "default" }));
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: "no_vault",
+          scope,
+          env: options.env || "default",
+        }),
+      );
     } else if (!options.quiet) {
       const envMsg = options.env ? ` for environment "${options.env}"` : "";
       console.error(chalk.red("✗"), `No ${scope} vault found${envMsg}`);
@@ -62,7 +77,9 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
 
   if (existsSync(dbPath)) {
     if (options.json) {
-      console.log(JSON.stringify({ success: true, message: "already_unlocked" }));
+      console.log(
+        JSON.stringify({ success: true, message: "already_unlocked" }),
+      );
     } else if (!options.quiet) {
       console.log(chalk.green("✓"), "Vault is already unlocked");
     }
@@ -99,7 +116,9 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
       decrypted = await decryptFile(Buffer.from(encryptedData), password);
     } catch {
       if (options.json) {
-        console.log(JSON.stringify({ success: false, error: "invalid_password" }));
+        console.log(
+          JSON.stringify({ success: false, error: "invalid_password" }),
+        );
       } else {
         spinner?.fail("Invalid password");
       }

@@ -1,25 +1,25 @@
 #!/usr/bin/env bun
 
 import { version } from "../package.json";
-import { init } from "./commands/init";
-import { set } from "./commands/set";
-import { get } from "./commands/get";
-import { list } from "./commands/list";
-import { rm } from "./commands/rm";
 import { exec } from "./commands/exec";
-import { run } from "./commands/run";
-import { onboard } from "./commands/onboard";
-import { importSecrets } from "./commands/import";
 import { exportSecrets } from "./commands/export";
-import { lock } from "./commands/lock";
-import { unlock } from "./commands/unlock";
-import { listEnvs } from "./commands/list-envs";
-import { scan } from "./commands/scan";
+import { get } from "./commands/get";
+import { history } from "./commands/history";
+import { importSecrets } from "./commands/import";
+import { init } from "./commands/init";
 import { installHook } from "./commands/install-hook";
 import { installHooks } from "./commands/install-hooks";
-import { tag, untag } from "./commands/tag";
-import { history } from "./commands/history";
+import { list } from "./commands/list";
+import { listEnvs } from "./commands/list-envs";
+import { lock } from "./commands/lock";
+import { onboard } from "./commands/onboard";
+import { rm } from "./commands/rm";
 import { rollback } from "./commands/rollback";
+import { run } from "./commands/run";
+import { scan } from "./commands/scan";
+import { set } from "./commands/set";
+import { tag, untag } from "./commands/tag";
+import { unlock } from "./commands/unlock";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -107,13 +107,19 @@ async function main() {
   // Parse --global flag or fallback to PSST_GLOBAL
   let global = args.includes("--global") || args.includes("-g");
   if (!global && process.env.PSST_GLOBAL) {
-    global = process.env.PSST_GLOBAL === "1" || process.env.PSST_GLOBAL.toLowerCase() === "true";
+    global =
+      process.env.PSST_GLOBAL === "1" ||
+      process.env.PSST_GLOBAL.toLowerCase() === "true";
   }
 
   // Parse --env flag or fallback to PSST_ENV
   let env: string | undefined;
   const envIndex = args.indexOf("--env");
-  if (envIndex !== -1 && args[envIndex + 1] && !args[envIndex + 1].startsWith("-")) {
+  if (
+    envIndex !== -1 &&
+    args[envIndex + 1] &&
+    !args[envIndex + 1].startsWith("-")
+  ) {
     env = args[envIndex + 1];
   } else if (process.env.PSST_ENV) {
     env = process.env.PSST_ENV;
@@ -127,7 +133,13 @@ async function main() {
     }
   }
 
-  const options = { json, quiet, env, global, tags: tags.length > 0 ? tags : undefined };
+  const options = {
+    json,
+    quiet,
+    env,
+    global,
+    tags: tags.length > 0 ? tags : undefined,
+  };
 
   // Remove global flags from args for command processing
   const cleanArgs = args.filter((a, i) => {
@@ -140,7 +152,11 @@ async function main() {
     return true;
   });
 
-  if (cleanArgs.length === 0 || cleanArgs[0] === "--help" || cleanArgs[0] === "-h") {
+  if (
+    cleanArgs.length === 0 ||
+    cleanArgs[0] === "--help" ||
+    cleanArgs[0] === "-h"
+  ) {
     if (!quiet) console.log(HELP);
     process.exit(0);
   }
@@ -171,7 +187,12 @@ async function main() {
       process.exit(1);
     }
 
-    await exec(secretNames, cmdArgs, { noMask, env, global, tags: options.tags });
+    await exec(secretNames, cmdArgs, {
+      noMask,
+      env,
+      global,
+      tags: options.tags,
+    });
     return;
   }
 
@@ -188,7 +209,9 @@ async function main() {
     case "set": {
       if (!cleanArgs[1]) {
         if (json) {
-          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+          console.log(
+            JSON.stringify({ success: false, error: "missing_name" }),
+          );
         } else if (!quiet) {
           console.error("Error: Secret name required");
           console.error("Usage: psst set <NAME> [VALUE]");
@@ -197,7 +220,10 @@ async function main() {
       }
       const setStdin = cleanArgs.includes("--stdin");
       // Value is cleanArgs[2] if it exists and isn't a flag
-      const setValue = cleanArgs[2] && !cleanArgs[2].startsWith("-") ? cleanArgs[2] : undefined;
+      const setValue =
+        cleanArgs[2] && !cleanArgs[2].startsWith("-")
+          ? cleanArgs[2]
+          : undefined;
       await set(cleanArgs[1], { ...options, stdin: setStdin, value: setValue });
       break;
     }
@@ -205,7 +231,9 @@ async function main() {
     case "get":
       if (!cleanArgs[1]) {
         if (json) {
-          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+          console.log(
+            JSON.stringify({ success: false, error: "missing_name" }),
+          );
         } else if (!quiet) {
           console.error("Error: Secret name required");
           console.error("Usage: psst get <NAME>");
@@ -228,7 +256,9 @@ async function main() {
     case "delete":
       if (!cleanArgs[1]) {
         if (json) {
-          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+          console.log(
+            JSON.stringify({ success: false, error: "missing_name" }),
+          );
         } else if (!quiet) {
           console.error("Error: Secret name required");
           console.error("Usage: psst rm <NAME>");
@@ -242,19 +272,26 @@ async function main() {
       const fromStdin = cleanArgs.includes("--stdin");
       const fromEnv = cleanArgs.includes("--from-env");
       const patternIndex = cleanArgs.indexOf("--pattern");
-      const pattern = patternIndex !== -1 ? cleanArgs[patternIndex + 1] : undefined;
+      const pattern =
+        patternIndex !== -1 ? cleanArgs[patternIndex + 1] : undefined;
 
-      const fileArgs = cleanArgs.slice(1).filter(
-        (a) => !a.startsWith("--") && a !== pattern
-      );
+      const fileArgs = cleanArgs
+        .slice(1)
+        .filter((a) => !a.startsWith("--") && a !== pattern);
 
-      await importSecrets(fileArgs, { ...options, stdin: fromStdin, fromEnv, pattern });
+      await importSecrets(fileArgs, {
+        ...options,
+        stdin: fromStdin,
+        fromEnv,
+        pattern,
+      });
       break;
     }
 
     case "export": {
       const envFileIndex = cleanArgs.indexOf("--env-file");
-      const envFile = envFileIndex !== -1 ? cleanArgs[envFileIndex + 1] : undefined;
+      const envFile =
+        envFileIndex !== -1 ? cleanArgs[envFileIndex + 1] : undefined;
 
       await exportSecrets({ ...options, envFile });
       break;
@@ -291,7 +328,9 @@ async function main() {
     case "history":
       if (!cleanArgs[1]) {
         if (json) {
-          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+          console.log(
+            JSON.stringify({ success: false, error: "missing_name" }),
+          );
         } else if (!quiet) {
           console.error("Error: Secret name required");
           console.error("Usage: psst history <NAME>");
@@ -304,7 +343,9 @@ async function main() {
     case "rollback": {
       if (!cleanArgs[1]) {
         if (json) {
-          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+          console.log(
+            JSON.stringify({ success: false, error: "missing_name" }),
+          );
         } else if (!quiet) {
           console.error("Error: Secret name required");
           console.error("Usage: psst rollback <NAME> --to <version>");
@@ -314,7 +355,9 @@ async function main() {
       const toIndex = cleanArgs.indexOf("--to");
       if (toIndex === -1 || !cleanArgs[toIndex + 1]) {
         if (json) {
-          console.log(JSON.stringify({ success: false, error: "missing_version" }));
+          console.log(
+            JSON.stringify({ success: false, error: "missing_version" }),
+          );
         } else if (!quiet) {
           console.error("Error: --to <version> required");
           console.error("Usage: psst rollback <NAME> --to <version>");
@@ -332,7 +375,9 @@ async function main() {
 
       if (runCmdArgs.length === 0) {
         if (json) {
-          console.log(JSON.stringify({ success: false, error: "missing_command" }));
+          console.log(
+            JSON.stringify({ success: false, error: "missing_command" }),
+          );
         } else if (!quiet) {
           console.error("Error: Command required");
           console.error("Usage: psst run <command>");
@@ -340,13 +385,20 @@ async function main() {
         process.exit(1);
       }
 
-      await run(runCmdArgs, { noMask: runNoMask, env, global, tags: options.tags });
+      await run(runCmdArgs, {
+        noMask: runNoMask,
+        env,
+        global,
+        tags: options.tags,
+      });
       break;
     }
 
     default:
       if (json) {
-        console.log(JSON.stringify({ success: false, error: "unknown_command", command }));
+        console.log(
+          JSON.stringify({ success: false, error: "unknown_command", command }),
+        );
       } else {
         console.error(`Unknown command: ${command}`);
         console.log(HELP);

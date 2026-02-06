@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, readdirSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
-import { encrypt, decrypt, keyToBuffer } from "./crypto";
-import { getKey, storeKey, generateKey, isKeychainAvailable } from "./keychain";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { decrypt, encrypt, keyToBuffer } from "./crypto";
+import { generateKey, getKey, isKeychainAvailable, storeKey } from "./keychain";
 
 const VAULT_DIR_NAME = ".psst";
 const DB_NAME = "vault.db";
@@ -32,7 +32,6 @@ export interface SecretHistoryEntry {
 export class Vault {
   private db: Database;
   private key: Buffer | null = null;
-  private vaultPath: string;
 
   constructor(vaultPath: string) {
     this.vaultPath = vaultPath;
@@ -53,7 +52,9 @@ export class Vault {
     `);
 
     // Migration: add tags column if it doesn't exist
-    const columns = this.db.query("PRAGMA table_info(secrets)").all() as { name: string }[];
+    const columns = this.db.query("PRAGMA table_info(secrets)").all() as {
+      name: string;
+    }[];
     const hasTagsColumn = columns.some((col) => col.name === "tags");
     if (!hasTagsColumn) {
       this.db.run("ALTER TABLE secrets ADD COLUMN tags TEXT DEFAULT '[]'");
@@ -108,18 +109,30 @@ export class Vault {
     // Archive existing secret to history before overwriting
     const existing = this.db
       .query("SELECT encrypted_value, iv, tags FROM secrets WHERE name = ?")
-      .get(name) as { encrypted_value: Buffer; iv: Buffer; tags: string } | null;
+      .get(name) as {
+      encrypted_value: Buffer;
+      iv: Buffer;
+      tags: string;
+    } | null;
 
     if (existing) {
       const maxVersion = this.db
-        .query("SELECT MAX(version) as max_v FROM secrets_history WHERE name = ?")
+        .query(
+          "SELECT MAX(version) as max_v FROM secrets_history WHERE name = ?",
+        )
         .get(name) as { max_v: number | null } | null;
       const nextVersion = (maxVersion?.max_v ?? 0) + 1;
 
       this.db.run(
         `INSERT INTO secrets_history (name, version, encrypted_value, iv, tags)
          VALUES (?, ?, ?, ?, ?)`,
-        [name, nextVersion, existing.encrypted_value, existing.iv, existing.tags || "[]"]
+        [
+          name,
+          nextVersion,
+          existing.encrypted_value,
+          existing.iv,
+          existing.tags || "[]",
+        ],
       );
 
       this.pruneHistory(name);
@@ -136,7 +149,7 @@ export class Vault {
          iv = excluded.iv,
          tags = excluded.tags,
          updated_at = CURRENT_TIMESTAMP`,
-      [name, encrypted, iv, tagsJson]
+      [name, encrypted, iv, tagsJson],
     );
   }
 
@@ -167,8 +180,15 @@ export class Vault {
 
   listSecrets(filterTags?: string[]): SecretMeta[] {
     const rows = this.db
-      .query("SELECT name, tags, created_at, updated_at FROM secrets ORDER BY name")
-      .all() as { name: string; tags: string; created_at: string; updated_at: string }[];
+      .query(
+        "SELECT name, tags, created_at, updated_at FROM secrets ORDER BY name",
+      )
+      .all() as {
+      name: string;
+      tags: string;
+      created_at: string;
+      updated_at: string;
+    }[];
 
     const secrets = rows.map((row) => ({
       name: row.name,
@@ -197,7 +217,7 @@ export class Vault {
   setTags(name: string, tags: string[]): boolean {
     const result = this.db.run(
       "UPDATE secrets SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
-      [JSON.stringify(tags), name]
+      [JSON.stringify(tags), name],
     );
     return result.changes > 0;
   }
@@ -217,7 +237,7 @@ export class Vault {
   getHistory(name: string): SecretHistoryEntry[] {
     const rows = this.db
       .query(
-        "SELECT version, tags, archived_at FROM secrets_history WHERE name = ? ORDER BY version DESC"
+        "SELECT version, tags, archived_at FROM secrets_history WHERE name = ? ORDER BY version DESC",
       )
       .all(name) as { version: number; tags: string; archived_at: string }[];
 
@@ -228,11 +248,16 @@ export class Vault {
     }));
   }
 
-  async getHistoryVersion(name: string, version: number): Promise<string | null> {
+  async getHistoryVersion(
+    name: string,
+    version: number,
+  ): Promise<string | null> {
     if (!this.key) throw new Error("Vault is locked");
 
     const row = this.db
-      .query("SELECT encrypted_value, iv FROM secrets_history WHERE name = ? AND version = ?")
+      .query(
+        "SELECT encrypted_value, iv FROM secrets_history WHERE name = ? AND version = ?",
+      )
       .get(name, version) as { encrypted_value: Buffer; iv: Buffer } | null;
 
     if (!row) return null;
@@ -245,15 +270,25 @@ export class Vault {
 
     // Check that the target version exists in history
     const historyRow = this.db
-      .query("SELECT encrypted_value, iv, tags FROM secrets_history WHERE name = ? AND version = ?")
-      .get(name, targetVersion) as { encrypted_value: Buffer; iv: Buffer; tags: string } | null;
+      .query(
+        "SELECT encrypted_value, iv, tags FROM secrets_history WHERE name = ? AND version = ?",
+      )
+      .get(name, targetVersion) as {
+      encrypted_value: Buffer;
+      iv: Buffer;
+      tags: string;
+    } | null;
 
     if (!historyRow) return false;
 
     // Check that the secret currently exists
     const currentRow = this.db
       .query("SELECT encrypted_value, iv, tags FROM secrets WHERE name = ?")
-      .get(name) as { encrypted_value: Buffer; iv: Buffer; tags: string } | null;
+      .get(name) as {
+      encrypted_value: Buffer;
+      iv: Buffer;
+      tags: string;
+    } | null;
 
     if (!currentRow) return false;
 
@@ -266,13 +301,24 @@ export class Vault {
     this.db.run(
       `INSERT INTO secrets_history (name, version, encrypted_value, iv, tags)
        VALUES (?, ?, ?, ?, ?)`,
-      [name, nextVersion, currentRow.encrypted_value, currentRow.iv, currentRow.tags || "[]"]
+      [
+        name,
+        nextVersion,
+        currentRow.encrypted_value,
+        currentRow.iv,
+        currentRow.tags || "[]",
+      ],
     );
 
     // Restore the target version to the main table
     this.db.run(
       `UPDATE secrets SET encrypted_value = ?, iv = ?, tags = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?`,
-      [historyRow.encrypted_value, historyRow.iv, historyRow.tags || "[]", name]
+      [
+        historyRow.encrypted_value,
+        historyRow.iv,
+        historyRow.tags || "[]",
+        name,
+      ],
     );
 
     this.pruneHistory(name);
@@ -289,7 +335,7 @@ export class Vault {
       `DELETE FROM secrets_history WHERE name = ? AND id NOT IN (
         SELECT id FROM secrets_history WHERE name = ? ORDER BY version DESC LIMIT ?
       )`,
-      [name, name, keep]
+      [name, name, keep],
     );
   }
 
@@ -305,7 +351,9 @@ export class Vault {
   /**
    * Initialize a new vault with keychain-stored key
    */
-  static async initializeVault(vaultPath: string): Promise<{ success: boolean; error?: string }> {
+  static async initializeVault(
+    vaultPath: string,
+  ): Promise<{ success: boolean; error?: string }> {
     // Check if keychain is available
     const hasKeychain = await isKeychainAvailable();
 
@@ -344,7 +392,9 @@ export class Vault {
     return { success: true };
   }
 
-  static findVaultPath(options: { global?: boolean; env?: string } = {}): string | null {
+  static findVaultPath(
+    options: { global?: boolean; env?: string } = {},
+  ): string | null {
     const { global = false, env } = options;
 
     // Determine base path based on scope (no fallback between local and global)
@@ -406,7 +456,10 @@ export class Vault {
       try {
         const entries = readdirSync(envsPath, { withFileTypes: true });
         for (const entry of entries) {
-          if (entry.isDirectory() && existsSync(join(envsPath, entry.name, DB_NAME))) {
+          if (
+            entry.isDirectory() &&
+            existsSync(join(envsPath, entry.name, DB_NAME))
+          ) {
             envs.push(entry.name);
           }
         }

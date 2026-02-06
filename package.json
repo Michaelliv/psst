@@ -16,7 +16,10 @@
     "build:linux": "bun build --compile --target=bun-linux-x64 src/main.ts --outfile psst-linux-x64",
     "build:mac-arm": "bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile psst-darwin-arm64",
     "build:mac-x64": "bun build --compile --target=bun-darwin-x64 src/main.ts --outfile psst-darwin-x64",
-    "test": "bun test"
+    "test": "bun test",
+    "format": "bunx biome format --write src/",
+    "lint": "bunx biome lint src/",
+    "check": "bunx biome check src/"
   },
   "repository": {
     "type": "git",
@@ -27,6 +30,7 @@
     "url": "https://github.com/Michaelliv/psst/issues"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
     "bun-types": "latest"
   },
   "peerDependencies": {

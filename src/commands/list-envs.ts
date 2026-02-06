@@ -1,17 +1,19 @@
 import chalk from "chalk";
-import { Vault } from "../vault/vault";
 import type { OutputOptions } from "../utils/output";
+import { Vault } from "../vault/vault";
 
 export async function listEnvs(options: OutputOptions = {}): Promise<void> {
   const globalEnvs = Vault.listEnvironments(true);
   const localEnvs = Vault.listEnvironments(false);
 
   if (options.json) {
-    console.log(JSON.stringify({
-      success: true,
-      global: globalEnvs,
-      local: localEnvs,
-    }));
+    console.log(
+      JSON.stringify({
+        success: true,
+        global: globalEnvs,
+        local: localEnvs,
+      }),
+    );
     return;
   }
 
@@ -28,7 +30,13 @@ export async function listEnvs(options: OutputOptions = {}): Promise<void> {
     console.log();
     console.log(chalk.dim("No environments found."));
     console.log();
-    console.log("Create one with", chalk.cyan("psst init"), "(local) or", chalk.cyan("psst init --global"), "(global)");
+    console.log(
+      "Create one with",
+      chalk.cyan("psst init"),
+      "(local) or",
+      chalk.cyan("psst init --global"),
+      "(global)",
+    );
     console.log();
     return;
   }

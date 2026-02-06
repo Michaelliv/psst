@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { parseEnvContent, importFromEnv } from "./import";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { importFromEnv, parseEnvContent } from "./import";
 
 describe("import", () => {
   describe("parseEnvContent", () => {
@@ -42,7 +42,9 @@ describe("import", () => {
     it("handles values with equals sign", () => {
       const content = "CONNECTION_STRING=host=localhost;port=5432";
       const result = parseEnvContent(content);
-      expect(result).toEqual([["CONNECTION_STRING", "host=localhost;port=5432"]]);
+      expect(result).toEqual([
+        ["CONNECTION_STRING", "host=localhost;port=5432"],
+      ]);
     });
 
     it("handles whitespace around key and value", () => {
@@ -81,7 +83,9 @@ describe("import", () => {
     it("handles URL values", () => {
       const content = "DATABASE_URL=postgres://user:pass@localhost:5432/db";
       const result = parseEnvContent(content);
-      expect(result).toEqual([["DATABASE_URL", "postgres://user:pass@localhost:5432/db"]]);
+      expect(result).toEqual([
+        ["DATABASE_URL", "postgres://user:pass@localhost:5432/db"],
+      ]);
     });
 
     it("handles multiline with Windows line endings", () => {
@@ -139,7 +143,7 @@ describe("import", () => {
   });
 
   describe("importFromEnv", () => {
-    const originalEnv = { ...process.env };
+    const _originalEnv = { ...process.env };
 
     beforeEach(() => {
       // Set up test environment variables
@@ -191,7 +195,9 @@ describe("import", () => {
 
     it("handles pattern that matches nothing", () => {
       const result = importFromEnv("^NONEXISTENT_PREFIX");
-      const hasNonexistent = result.some(([name]) => name.startsWith("NONEXISTENT"));
+      const hasNonexistent = result.some(([name]) =>
+        name.startsWith("NONEXISTENT"),
+      );
       expect(hasNonexistent).toBe(false);
     });
 

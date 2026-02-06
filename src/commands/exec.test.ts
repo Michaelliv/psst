@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { maskSecrets } from "./exec";
 
 describe("exec", () => {
@@ -18,7 +18,9 @@ describe("exec", () => {
     it("masks multiple occurrences of same secret", () => {
       const text = "secret appears here: pass123, and again: pass123";
       const result = maskSecrets(text, ["pass123"]);
-      expect(result).toBe("secret appears here: [REDACTED], and again: [REDACTED]");
+      expect(result).toBe(
+        "secret appears here: [REDACTED], and again: [REDACTED]",
+      );
     });
 
     it("handles empty secrets array", () => {
@@ -47,7 +49,9 @@ describe("exec", () => {
     it("handles multiline text", () => {
       const text = "Line 1: secret123\nLine 2: secret123\nLine 3: normal";
       const result = maskSecrets(text, ["secret123"]);
-      expect(result).toBe("Line 1: [REDACTED]\nLine 2: [REDACTED]\nLine 3: normal");
+      expect(result).toBe(
+        "Line 1: [REDACTED]\nLine 2: [REDACTED]\nLine 3: normal",
+      );
     });
 
     it("handles overlapping secrets (masks first match)", () => {
@@ -79,7 +83,9 @@ describe("exec", () => {
     it("handles URL with secrets", () => {
       const text = "https://api.example.com?key=abc123&token=xyz789";
       const result = maskSecrets(text, ["abc123", "xyz789"]);
-      expect(result).toBe("https://api.example.com?key=[REDACTED]&token=[REDACTED]");
+      expect(result).toBe(
+        "https://api.example.com?key=[REDACTED]&token=[REDACTED]",
+      );
     });
 
     it("preserves non-secret content exactly", () => {

@@ -1,4 +1,4 @@
-import { createHash, pbkdf2Sync, randomBytes } from "crypto";
+import { createHash, pbkdf2Sync, randomBytes } from "node:crypto";
 
 const KEY_LENGTH = 32; // 256 bits
 const IV_LENGTH = 12; // 96 bits for GCM
@@ -23,7 +23,7 @@ export function keyToBuffer(key: string): Buffer {
 
 export async function encrypt(
   plaintext: string,
-  key: Buffer
+  key: Buffer,
 ): Promise<{ encrypted: Buffer; iv: Buffer }> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
 
@@ -32,13 +32,13 @@ export async function encrypt(
     key,
     { name: "AES-GCM" },
     false,
-    ["encrypt"]
+    ["encrypt"],
   );
 
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     cryptoKey,
-    new TextEncoder().encode(plaintext)
+    new TextEncoder().encode(plaintext),
   );
 
   return {
@@ -50,20 +50,20 @@ export async function encrypt(
 export async function decrypt(
   encrypted: Buffer,
   iv: Buffer,
-  key: Buffer
+  key: Buffer,
 ): Promise<string> {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
     key,
     { name: "AES-GCM" },
     false,
-    ["decrypt"]
+    ["decrypt"],
   );
 
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
     cryptoKey,
-    encrypted
+    encrypted,
   );
 
   return new TextDecoder().decode(decrypted);
@@ -82,7 +82,7 @@ export function deriveKey(password: string, salt: Buffer): Buffer {
  */
 export async function encryptFile(
   data: Buffer,
-  password: string
+  password: string,
 ): Promise<Buffer> {
   const salt = randomBytes(SALT_LENGTH);
   const key = deriveKey(password, salt);
@@ -93,13 +93,13 @@ export async function encryptFile(
     key,
     { name: "AES-GCM" },
     false,
-    ["encrypt"]
+    ["encrypt"],
   );
 
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     cryptoKey,
-    data
+    data,
   );
 
   // Concatenate: salt + iv + encrypted
@@ -112,7 +112,7 @@ export async function encryptFile(
  */
 export async function decryptFile(
   data: Buffer,
-  password: string
+  password: string,
 ): Promise<Buffer> {
   if (data.length < SALT_LENGTH + IV_LENGTH + 16) {
     throw new Error("Invalid encrypted data");
@@ -129,13 +129,13 @@ export async function decryptFile(
     key,
     { name: "AES-GCM" },
     false,
-    ["decrypt"]
+    ["decrypt"],
   );
 
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
     cryptoKey,
-    encrypted
+    encrypted,
   );
 
   return Buffer.from(decrypted);

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdirSync, rmSync, existsSync, writeFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Vault } from "./vault";
 
 describe("Vault unit tests", () => {
@@ -11,7 +11,10 @@ describe("Vault unit tests", () => {
 
   beforeEach(() => {
     // Create isolated test directory
-    testDir = join(tmpdir(), `psst-unit-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    testDir = join(
+      tmpdir(),
+      `psst-unit-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     vaultPath = join(testDir, ".psst", "envs", "default");
     mkdirSync(vaultPath, { recursive: true });
 
@@ -102,7 +105,9 @@ describe("Vault unit tests", () => {
     it("throws when vault is locked", async () => {
       const vault = new Vault(vaultPath);
 
-      await expect(vault.setSecret("KEY", "value")).rejects.toThrow("Vault is locked");
+      await expect(vault.setSecret("KEY", "value")).rejects.toThrow(
+        "Vault is locked",
+      );
       await expect(vault.getSecret("KEY")).rejects.toThrow("Vault is locked");
 
       vault.close();
@@ -266,7 +271,7 @@ describe("Vault unit tests", () => {
       const secrets = vault.listSecrets();
       vault.close();
 
-      expect(secrets.map(s => s.name)).toEqual(["APPLE", "MANGO", "ZEBRA"]);
+      expect(secrets.map((s) => s.name)).toEqual(["APPLE", "MANGO", "ZEBRA"]);
     });
   });
 
@@ -347,7 +352,7 @@ describe("Vault unit tests", () => {
 
         // Use endsWith to handle /var vs /private/var symlink on macOS
         expect(path).not.toBeNull();
-        expect(path!.endsWith(".psst/envs/default")).toBe(true);
+        expect(path?.endsWith(".psst/envs/default")).toBe(true);
       });
     });
 
@@ -549,9 +554,9 @@ describe("Vault unit tests", () => {
 
       vault.close();
 
-      expect(awsSecrets.map(s => s.name)).toEqual(["AWS_KEY"]);
-      expect(prodSecrets.map(s => s.name)).toEqual(["AWS_KEY", "DB_KEY"]);
-      expect(paymentSecrets.map(s => s.name)).toEqual(["STRIPE_KEY"]);
+      expect(awsSecrets.map((s) => s.name)).toEqual(["AWS_KEY"]);
+      expect(prodSecrets.map((s) => s.name)).toEqual(["AWS_KEY", "DB_KEY"]);
+      expect(paymentSecrets.map((s) => s.name)).toEqual(["STRIPE_KEY"]);
     });
 
     it("listSecrets with multiple filter tags uses OR logic", async () => {
@@ -567,8 +572,8 @@ describe("Vault unit tests", () => {
       vault.close();
 
       expect(secrets.length).toBe(2);
-      expect(secrets.map(s => s.name)).toContain("AWS_KEY");
-      expect(secrets.map(s => s.name)).toContain("STRIPE_KEY");
+      expect(secrets.map((s) => s.name)).toContain("AWS_KEY");
+      expect(secrets.map((s) => s.name)).toContain("STRIPE_KEY");
     });
 
     it("listSecrets with no matching tags returns empty", async () => {
@@ -807,7 +812,9 @@ describe("Vault unit tests", () => {
     it("getHistoryVersion throws when vault is locked", async () => {
       const vault = new Vault(vaultPath);
 
-      await expect(vault.getHistoryVersion("KEY", 1)).rejects.toThrow("Vault is locked");
+      await expect(vault.getHistoryVersion("KEY", 1)).rejects.toThrow(
+        "Vault is locked",
+      );
 
       vault.close();
     });

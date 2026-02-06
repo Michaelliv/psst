@@ -1,6 +1,6 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import chalk from "chalk";
-import { existsSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
 import type { OutputOptions } from "../utils/output";
 
 const PSST_INSTRUCTIONS = `
@@ -89,7 +89,13 @@ export async function onboard(options: OutputOptions = {}): Promise<void> {
   // Check if already onboarded - this is idempotent, so it's success
   if (existingContent.includes(MARKER)) {
     if (options.json) {
-      console.log(JSON.stringify({ success: true, file: targetFile, message: "already_onboarded" }));
+      console.log(
+        JSON.stringify({
+          success: true,
+          file: targetFile,
+          message: "already_onboarded",
+        }),
+      );
     } else if (!options.quiet) {
       console.log(chalk.green("✓"), "Already onboarded");
       console.log(chalk.dim(`  ${targetFile}`));
@@ -98,17 +104,20 @@ export async function onboard(options: OutputOptions = {}): Promise<void> {
   }
 
   if (targetFile) {
-    const newContent = existingContent.trimEnd() + "\n\n" + PSST_INSTRUCTIONS + "\n";
+    const newContent = `${existingContent.trimEnd()}\n\n${PSST_INSTRUCTIONS}\n`;
     writeFileSync(targetFile, newContent);
   } else {
-    writeFileSync(agentsMd, PSST_INSTRUCTIONS + "\n");
+    writeFileSync(agentsMd, `${PSST_INSTRUCTIONS}\n`);
     targetFile = agentsMd;
   }
 
   if (options.json) {
     console.log(JSON.stringify({ success: true, file: targetFile }));
   } else if (!options.quiet) {
-    console.log(chalk.green("✓"), `Added psst instructions to ${chalk.bold(targetFile)}`);
+    console.log(
+      chalk.green("✓"),
+      `Added psst instructions to ${chalk.bold(targetFile)}`,
+    );
     console.log();
     console.log(chalk.dim("Your agent now knows how to use psst!"));
     console.log();

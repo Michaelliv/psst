@@ -1,11 +1,11 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
-  keyToBuffer,
-  encrypt,
   decrypt,
-  deriveKey,
-  encryptFile,
   decryptFile,
+  deriveKey,
+  encrypt,
+  encryptFile,
+  keyToBuffer,
 } from "./crypto";
 
 describe("crypto", () => {
@@ -178,7 +178,9 @@ describe("crypto", () => {
     it("fails on truncated data", async () => {
       const shortData = Buffer.from("too short");
 
-      await expect(decryptFile(shortData, "password")).rejects.toThrow("Invalid encrypted data");
+      await expect(decryptFile(shortData, "password")).rejects.toThrow(
+        "Invalid encrypted data",
+      );
     });
 
     it("handles binary data", async () => {

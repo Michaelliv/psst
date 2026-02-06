@@ -1,10 +1,10 @@
+import { execSync } from "node:child_process";
+import { existsSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import chalk from "chalk";
-import { execSync } from "child_process";
-import { existsSync, statSync } from "fs";
-import { join, relative } from "path";
-import { getUnlockedVault } from "./common";
 import { EXIT_ERROR, EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
+import { getUnlockedVault } from "./common";
 
 interface ScanMatch {
   file: string;
@@ -21,7 +21,10 @@ interface ScanResult {
 // Minimum secret length to avoid false positives
 const MIN_SECRET_LENGTH = 4;
 
-export async function scan(args: string[], options: OutputOptions = {}): Promise<void> {
+export async function scan(
+  args: string[],
+  options: OutputOptions = {},
+): Promise<void> {
   const staged = args.includes("--staged");
   const pathIndex = args.indexOf("--path");
   const scanPath = pathIndex !== -1 ? args[pathIndex + 1] : undefined;
@@ -33,7 +36,14 @@ export async function scan(args: string[], options: OutputOptions = {}): Promise
   if (secretMetas.length === 0) {
     vault.close();
     if (options.json) {
-      console.log(JSON.stringify({ success: true, matches: [], filesScanned: 0, secretsChecked: 0 }));
+      console.log(
+        JSON.stringify({
+          success: true,
+          matches: [],
+          filesScanned: 0,
+          secretsChecked: 0,
+        }),
+      );
     } else if (!options.quiet) {
       console.log(chalk.yellow("⚠"), "No secrets in vault to scan for");
     }
@@ -52,9 +62,19 @@ export async function scan(args: string[], options: OutputOptions = {}): Promise
 
   if (secrets.size === 0) {
     if (options.json) {
-      console.log(JSON.stringify({ success: true, matches: [], filesScanned: 0, secretsChecked: 0 }));
+      console.log(
+        JSON.stringify({
+          success: true,
+          matches: [],
+          filesScanned: 0,
+          secretsChecked: 0,
+        }),
+      );
     } else if (!options.quiet) {
-      console.log(chalk.yellow("⚠"), "No secrets long enough to scan for (min 4 chars)");
+      console.log(
+        chalk.yellow("⚠"),
+        "No secrets long enough to scan for (min 4 chars)",
+      );
     }
     return;
   }
@@ -74,7 +94,14 @@ export async function scan(args: string[], options: OutputOptions = {}): Promise
 
   if (files.length === 0) {
     if (options.json) {
-      console.log(JSON.stringify({ success: true, matches: [], filesScanned: 0, secretsChecked: secrets.size }));
+      console.log(
+        JSON.stringify({
+          success: true,
+          matches: [],
+          filesScanned: 0,
+          secretsChecked: secrets.size,
+        }),
+      );
     } else if (!options.quiet) {
       console.log(chalk.green("✓"), "No files to scan");
     }
@@ -86,12 +113,14 @@ export async function scan(args: string[], options: OutputOptions = {}): Promise
 
   // Output results
   if (options.json) {
-    console.log(JSON.stringify({
-      success: result.matches.length === 0,
-      matches: result.matches,
-      filesScanned: result.filesScanned,
-      secretsChecked: result.secretsChecked,
-    }));
+    console.log(
+      JSON.stringify({
+        success: result.matches.length === 0,
+        matches: result.matches,
+        filesScanned: result.filesScanned,
+        secretsChecked: result.secretsChecked,
+      }),
+    );
     if (result.matches.length > 0) {
       process.exit(EXIT_USER_ERROR);
     }
@@ -107,7 +136,10 @@ export async function scan(args: string[], options: OutputOptions = {}): Promise
 
   // Human output
   if (result.matches.length === 0) {
-    console.log(chalk.green("✓"), `Scanned ${result.filesScanned} files - no secrets found`);
+    console.log(
+      chalk.green("✓"),
+      `Scanned ${result.filesScanned} files - no secrets found`,
+    );
     return;
   }
 
@@ -133,9 +165,15 @@ export async function scan(args: string[], options: OutputOptions = {}): Promise
 
   const uniqueSecrets = new Set(result.matches.map((m) => m.secretName));
   console.log(
-    chalk.dim(`Found ${uniqueSecrets.size} secret(s) in ${byFile.size} file(s)`)
+    chalk.dim(
+      `Found ${uniqueSecrets.size} secret(s) in ${byFile.size} file(s)`,
+    ),
   );
-  console.log(chalk.dim("  Tip: Use"), chalk.cyan("PSST_SKIP_SCAN=1 git commit"), chalk.dim("to bypass"));
+  console.log(
+    chalk.dim("  Tip: Use"),
+    chalk.cyan("PSST_SKIP_SCAN=1 git commit"),
+    chalk.dim("to bypass"),
+  );
   console.log();
 
   process.exit(EXIT_USER_ERROR);
@@ -145,10 +183,13 @@ function getFilesToScan(staged: boolean, scanPath?: string): string[] {
   if (staged) {
     // Get staged files from git
     try {
-      const output = execSync("git diff --cached --name-only --diff-filter=ACMR", {
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      const output = execSync(
+        "git diff --cached --name-only --diff-filter=ACMR",
+        {
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
       return output.trim().split("\n").filter(Boolean);
     } catch {
       throw new Error("Not a git repository or git not available");
@@ -178,7 +219,7 @@ function getFilesToScan(staged: boolean, scanPath?: string): string[] {
 
 function getFilesRecursive(dir: string): string[] {
   const files: string[] = [];
-  const entries = Bun.file(dir);
+  const _entries = Bun.file(dir);
 
   // Use glob to get all files
   const glob = new Bun.Glob("**/*");
@@ -223,7 +264,7 @@ function shouldSkipFile(path: string): boolean {
 
 async function scanFiles(
   files: string[],
-  secrets: Map<string, string>
+  secrets: Map<string, string>,
 ): Promise<ScanResult> {
   const matches: ScanMatch[] = [];
   let filesScanned = 0;
