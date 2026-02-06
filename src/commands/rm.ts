@@ -6,6 +6,9 @@ import type { OutputOptions } from "../utils/output";
 export async function rm(name: string, options: OutputOptions = {}): Promise<void> {
   const vault = await getUnlockedVault(options);
   const removed = vault.removeSecret(name);
+  if (removed) {
+    vault.clearHistory(name);
+  }
   vault.close();
 
   if (!removed) {

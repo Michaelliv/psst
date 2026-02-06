@@ -23,6 +23,12 @@ export interface SecretMeta {
   updated_at: string;
 }
 
+export interface SecretHistoryEntry {
+  version: number;
+  tags: string[];
+  archived_at: string;
+}
+
 export class Vault {
   private db: Database;
   private key: Buffer | null = null;
@@ -52,6 +58,23 @@ export class Vault {
     if (!hasTagsColumn) {
       this.db.run("ALTER TABLE secrets ADD COLUMN tags TEXT DEFAULT '[]'");
     }
+
+    // Migration: add secrets_history table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS secrets_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        encrypted_value BLOB NOT NULL,
+        iv BLOB NOT NULL,
+        tags TEXT DEFAULT '[]',
+        archived_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(name, version)
+      )
+    `);
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_secrets_history_name ON secrets_history(name)
+    `);
   }
 
   /**
@@ -81,6 +104,26 @@ export class Vault {
 
   async setSecret(name: string, value: string, tags?: string[]): Promise<void> {
     if (!this.key) throw new Error("Vault is locked");
+
+    // Archive existing secret to history before overwriting
+    const existing = this.db
+      .query("SELECT encrypted_value, iv, tags FROM secrets WHERE name = ?")
+      .get(name) as { encrypted_value: Buffer; iv: Buffer; tags: string } | null;
+
+    if (existing) {
+      const maxVersion = this.db
+        .query("SELECT MAX(version) as max_v FROM secrets_history WHERE name = ?")
+        .get(name) as { max_v: number | null } | null;
+      const nextVersion = (maxVersion?.max_v ?? 0) + 1;
+
+      this.db.run(
+        `INSERT INTO secrets_history (name, version, encrypted_value, iv, tags)
+         VALUES (?, ?, ?, ?, ?)`,
+        [name, nextVersion, existing.encrypted_value, existing.iv, existing.tags || "[]"]
+      );
+
+      this.pruneHistory(name);
+    }
 
     const { encrypted, iv } = await encrypt(value, this.key);
     const tagsJson = JSON.stringify(tags || []);
@@ -169,6 +212,85 @@ export class Vault {
     const existing = this.getTags(name);
     const filtered = existing.filter((t) => !tagsToRemove.includes(t));
     return this.setTags(name, filtered);
+  }
+
+  getHistory(name: string): SecretHistoryEntry[] {
+    const rows = this.db
+      .query(
+        "SELECT version, tags, archived_at FROM secrets_history WHERE name = ? ORDER BY version DESC"
+      )
+      .all(name) as { version: number; tags: string; archived_at: string }[];
+
+    return rows.map((row) => ({
+      version: row.version,
+      tags: JSON.parse(row.tags || "[]") as string[],
+      archived_at: row.archived_at,
+    }));
+  }
+
+  async getHistoryVersion(name: string, version: number): Promise<string | null> {
+    if (!this.key) throw new Error("Vault is locked");
+
+    const row = this.db
+      .query("SELECT encrypted_value, iv FROM secrets_history WHERE name = ? AND version = ?")
+      .get(name, version) as { encrypted_value: Buffer; iv: Buffer } | null;
+
+    if (!row) return null;
+
+    return decrypt(row.encrypted_value, row.iv, this.key);
+  }
+
+  async rollback(name: string, targetVersion: number): Promise<boolean> {
+    if (!this.key) throw new Error("Vault is locked");
+
+    // Check that the target version exists in history
+    const historyRow = this.db
+      .query("SELECT encrypted_value, iv, tags FROM secrets_history WHERE name = ? AND version = ?")
+      .get(name, targetVersion) as { encrypted_value: Buffer; iv: Buffer; tags: string } | null;
+
+    if (!historyRow) return false;
+
+    // Check that the secret currently exists
+    const currentRow = this.db
+      .query("SELECT encrypted_value, iv, tags FROM secrets WHERE name = ?")
+      .get(name) as { encrypted_value: Buffer; iv: Buffer; tags: string } | null;
+
+    if (!currentRow) return false;
+
+    // Archive current value first (making rollback reversible)
+    const maxVersion = this.db
+      .query("SELECT MAX(version) as max_v FROM secrets_history WHERE name = ?")
+      .get(name) as { max_v: number | null } | null;
+    const nextVersion = (maxVersion?.max_v ?? 0) + 1;
+
+    this.db.run(
+      `INSERT INTO secrets_history (name, version, encrypted_value, iv, tags)
+       VALUES (?, ?, ?, ?, ?)`,
+      [name, nextVersion, currentRow.encrypted_value, currentRow.iv, currentRow.tags || "[]"]
+    );
+
+    // Restore the target version to the main table
+    this.db.run(
+      `UPDATE secrets SET encrypted_value = ?, iv = ?, tags = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?`,
+      [historyRow.encrypted_value, historyRow.iv, historyRow.tags || "[]", name]
+    );
+
+    this.pruneHistory(name);
+
+    return true;
+  }
+
+  clearHistory(name: string): void {
+    this.db.run("DELETE FROM secrets_history WHERE name = ?", [name]);
+  }
+
+  private pruneHistory(name: string, keep: number = 10): void {
+    this.db.run(
+      `DELETE FROM secrets_history WHERE name = ? AND id NOT IN (
+        SELECT id FROM secrets_history WHERE name = ? ORDER BY version DESC LIMIT ?
+      )`,
+      [name, name, keep]
+    );
   }
 
   removeSecret(name: string): boolean {
