@@ -364,20 +364,24 @@ export class Vault {
       };
     }
 
-    // Generate and store key
-    const key = generateKey();
-    const storeResult = await storeKey(key);
+    // Reuse existing key if one exists, otherwise generate a new one
+    const existingKey = await getKey();
 
-    if (!storeResult.success) {
-      // Keychain failed, check for fallback
-      if (!process.env.PSST_PASSWORD) {
-        return {
-          success: false,
-          error: `Keychain error: ${storeResult.error}. Set PSST_PASSWORD as fallback.`,
-        };
+    if (!existingKey.success || !existingKey.key) {
+      const key = generateKey();
+      const storeResult = await storeKey(key);
+
+      if (!storeResult.success) {
+        // Keychain failed, check for fallback
+        if (!process.env.PSST_PASSWORD) {
+          return {
+            success: false,
+            error: `Keychain error: ${storeResult.error}. Set PSST_PASSWORD as fallback.`,
+          };
+        }
+        // Use PSST_PASSWORD as key (user is responsible for it)
+        console.log("Note: Using PSST_PASSWORD (keychain not available)");
       }
-      // Use PSST_PASSWORD as key (user is responsible for it)
-      console.log("Note: Using PSST_PASSWORD (keychain not available)");
     }
 
     // Create vault directory and database
