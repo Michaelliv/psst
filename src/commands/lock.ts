@@ -1,24 +1,39 @@
+import { existsSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import chalk from "chalk";
 import ora from "ora";
-import { existsSync, unlinkSync } from "fs";
-import { join } from "path";
-import { Vault } from "../vault/vault";
+import {
+  EXIT_ERROR,
+  EXIT_LOCKED,
+  EXIT_NO_VAULT,
+  EXIT_USER_ERROR,
+} from "../utils/exit-codes";
+import { readPassword } from "../utils/input";
+import type { OutputOptions } from "../utils/output";
 import { encryptFile } from "../vault/crypto";
 import { deleteKey, getKey } from "../vault/keychain";
-import { readPassword } from "../utils/input";
-import { EXIT_USER_ERROR, EXIT_LOCKED, EXIT_NO_VAULT, EXIT_ERROR } from "../utils/exit-codes";
-import type { OutputOptions } from "../utils/output";
+import { Vault } from "../vault/vault";
 
 const DB_NAME = "vault.db";
 const LOCKED_NAME = "vault.db.locked";
 
 export async function lock(options: OutputOptions = {}): Promise<void> {
-  const vaultPath = Vault.findVaultPath({ global: options.global, env: options.env });
+  const vaultPath = Vault.findVaultPath({
+    global: options.global,
+    env: options.env,
+  });
 
   if (!vaultPath) {
     const scope = options.global ? "global" : "local";
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "no_vault", scope, env: options.env || "default" }));
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: "no_vault",
+          scope,
+          env: options.env || "default",
+        }),
+      );
     } else if (!options.quiet) {
       const envMsg = options.env ? ` for environment "${options.env}"` : "";
       console.error(chalk.red("✗"), `No ${scope} vault found${envMsg}`);
@@ -35,7 +50,9 @@ export async function lock(options: OutputOptions = {}): Promise<void> {
   if (!existsSync(dbPath)) {
     if (existsSync(lockedPath)) {
       if (options.json) {
-        console.log(JSON.stringify({ success: false, error: "already_locked" }));
+        console.log(
+          JSON.stringify({ success: false, error: "already_locked" }),
+        );
       } else if (!options.quiet) {
         console.log(chalk.yellow("⚠"), "Vault is already locked");
       }
@@ -73,7 +90,9 @@ export async function lock(options: OutputOptions = {}): Promise<void> {
       } else {
         spinner?.fail("No vault key found");
         if (!options.quiet) {
-          console.error(chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"));
+          console.error(
+            chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"),
+          );
         }
       }
       process.exit(EXIT_ERROR);
@@ -85,7 +104,11 @@ export async function lock(options: OutputOptions = {}): Promise<void> {
     keyLengthBuffer.writeUInt32LE(keyBuffer.length, 0);
 
     const dbData = await Bun.file(dbPath).arrayBuffer();
-    const combined = Buffer.concat([keyLengthBuffer, keyBuffer, Buffer.from(dbData)]);
+    const combined = Buffer.concat([
+      keyLengthBuffer,
+      keyBuffer,
+      Buffer.from(dbData),
+    ]);
 
     const encrypted = await encryptFile(combined, password);
     await Bun.write(lockedPath, encrypted);

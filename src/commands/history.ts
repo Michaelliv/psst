@@ -1,9 +1,12 @@
 import chalk from "chalk";
-import { getUnlockedVault } from "./common";
 import { EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
+import { getUnlockedVault } from "./common";
 
-export async function history(name: string, options: OutputOptions = {}): Promise<void> {
+export async function history(
+  name: string,
+  options: OutputOptions = {},
+): Promise<void> {
   const vault = await getUnlockedVault(options);
 
   // Check secret exists
@@ -34,7 +37,7 @@ export async function history(name: string, options: OutputOptions = {}): Promis
           tags: e.tags,
           archived_at: e.archived_at,
         })),
-      })
+      }),
     );
     return;
   }
@@ -47,16 +50,19 @@ export async function history(name: string, options: OutputOptions = {}): Promis
   console.log(chalk.green("●"), "current", chalk.dim("(active)"));
 
   for (const entry of entries) {
-    const date = new Date(entry.archived_at + "Z");
-    const formatted = date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }) + " " + date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+    const date = new Date(`${entry.archived_at}Z`);
+    const formatted =
+      date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }) +
+      " " +
+      date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
     console.log(chalk.dim("●"), `v${entry.version}`, chalk.dim(formatted));
   }
 

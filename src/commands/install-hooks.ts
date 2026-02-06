@@ -1,6 +1,6 @@
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import chalk from "chalk";
-import { existsSync, mkdirSync, chmodSync } from "fs";
-import { join } from "path";
 import { EXIT_ERROR, EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
@@ -187,7 +187,7 @@ const SETTINGS_CONFIG = {
 
 export async function installHooks(
   args: string[],
-  options: OutputOptions = {}
+  options: OutputOptions = {},
 ): Promise<void> {
   const isGlobal = args.includes("--global") || args.includes("-g");
   const force = args.includes("--force") || args.includes("-f");
@@ -216,7 +216,7 @@ export async function installHooks(
           success: false,
           error: "hooks_exist",
           path: hooksDir,
-        })
+        }),
       );
     } else if (!options.quiet) {
       console.error(chalk.red("✗"), "Hooks already installed");
@@ -255,7 +255,7 @@ export async function installHooks(
       hooks: mergeHooks(existingSettings.hooks || {}, SETTINGS_CONFIG.hooks),
     };
 
-    await Bun.write(settingsPath, JSON.stringify(newSettings, null, 2) + "\n");
+    await Bun.write(settingsPath, `${JSON.stringify(newSettings, null, 2)}\n`);
 
     if (options.json) {
       console.log(
@@ -263,7 +263,7 @@ export async function installHooks(
           success: true,
           hooks: [preHookPath, postHookPath],
           settings: settingsPath,
-        })
+        }),
       );
     } else if (!options.quiet) {
       console.log(chalk.green("✓"), "Claude Code hooks installed");
@@ -276,11 +276,22 @@ export async function installHooks(
       console.log(chalk.dim(`  ${settingsPath}`));
       console.log();
       console.log("Protection enabled:");
-      console.log(chalk.dim("  • Blocks"), chalk.cyan("psst get"), chalk.dim("and"), chalk.cyan("psst export"));
-      console.log(chalk.dim("  • Blocks"), chalk.cyan("--no-mask"), chalk.dim("flag"));
-      console.log(chalk.dim("  • Redacts secrets written to files (plaintext + encoded)"));
+      console.log(
+        chalk.dim("  • Blocks"),
+        chalk.cyan("psst get"),
+        chalk.dim("and"),
+        chalk.cyan("psst export"),
+      );
+      console.log(
+        chalk.dim("  • Blocks"),
+        chalk.cyan("--no-mask"),
+        chalk.dim("flag"),
+      );
+      console.log(
+        chalk.dim("  • Redacts secrets written to files (plaintext + encoded)"),
+      );
       console.log();
-      console.log(chalk.dim("To remove:"), chalk.cyan("rm -rf " + hooksDir));
+      console.log(chalk.dim("To remove:"), chalk.cyan(`rm -rf ${hooksDir}`));
     }
   } catch (err: any) {
     if (options.json) {
@@ -304,7 +315,7 @@ function mergeHooks(existing: any, incoming: any): any {
       // Check if psst hooks already exist
       for (const matcher of matchers) {
         const exists = result[event].some((m: any) =>
-          m.hooks?.some((h: any) => h.command?.includes("psst-"))
+          m.hooks?.some((h: any) => h.command?.includes("psst-")),
         );
         if (!exists) {
           result[event].push(matcher);

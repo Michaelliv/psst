@@ -5,7 +5,7 @@ import type { OutputOptions } from "./output";
  */
 export async function readPassword(
   prompt: string,
-  options: OutputOptions = {}
+  options: OutputOptions = {},
 ): Promise<string | null> {
   // Check env var first
   if (process.env.PSST_PASSWORD) {
@@ -17,7 +17,7 @@ export async function readPassword(
     return null;
   }
 
-  const { spawnSync } = await import("child_process");
+  const { spawnSync } = await import("node:child_process");
 
   process.stdout.write(prompt);
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
@@ -66,7 +66,7 @@ export async function readStdin(): Promise<string> {
  * Read secret value interactively (with echo disabled) or from stdin
  */
 export async function readSecretValue(prompt: string): Promise<string> {
-  const { spawnSync } = await import("child_process");
+  const { spawnSync } = await import("node:child_process");
 
   if (!process.stdin.isTTY) {
     return (await readStdin()).trim();

@@ -1,12 +1,14 @@
 import chalk from "chalk";
-import { getUnlockedVault } from "./common";
 import type { OutputOptions } from "../utils/output";
+import { getUnlockedVault } from "./common";
 
 interface ExportOptions extends OutputOptions {
   envFile?: string;
 }
 
-export async function exportSecrets(options: ExportOptions = {}): Promise<void> {
+export async function exportSecrets(
+  options: ExportOptions = {},
+): Promise<void> {
   const vault = await getUnlockedVault(options);
   const secrets = vault.listSecrets();
 
@@ -32,15 +34,24 @@ export async function exportSecrets(options: ExportOptions = {}): Promise<void> 
 
   vault.close();
 
-  const content = lines.join("\n") + "\n";
+  const content = `${lines.join("\n")}\n`;
 
   if (options.envFile) {
     await Bun.write(options.envFile, content);
 
     if (options.json) {
-      console.log(JSON.stringify({ success: true, exported: secrets.length, file: options.envFile }));
+      console.log(
+        JSON.stringify({
+          success: true,
+          exported: secrets.length,
+          file: options.envFile,
+        }),
+      );
     } else if (!options.quiet) {
-      console.log(chalk.green("✓"), `Exported ${chalk.bold(secrets.length)} secret(s) to ${chalk.dim(options.envFile)}`);
+      console.log(
+        chalk.green("✓"),
+        `Exported ${chalk.bold(secrets.length)} secret(s) to ${chalk.dim(options.envFile)}`,
+      );
     }
   } else {
     // Write to stdout - no decoration
@@ -48,7 +59,9 @@ export async function exportSecrets(options: ExportOptions = {}): Promise<void> 
 
     if (options.json) {
       // JSON mode with stdout export doesn't make sense, but handle it
-      console.error(JSON.stringify({ success: true, exported: secrets.length }));
+      console.error(
+        JSON.stringify({ success: true, exported: secrets.length }),
+      );
     }
   }
 }

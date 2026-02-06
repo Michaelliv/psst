@@ -25,7 +25,7 @@ export const bulletDim = (msg: string) => console.log(chalk.dim("●"), msg);
 
 // Hint for next steps
 export const hint = (msg: string) => console.log(chalk.dim(`  ${msg}`));
-export const nextStep = (command: string) => console.log("  " + cmd(command));
+export const nextStep = (command: string) => console.log(`  ${cmd(command)}`);
 
 // Section headers
 export const header = (title: string) => {
@@ -46,7 +46,7 @@ export function output(
     json?: () => object;
     quiet?: () => void;
     human: () => void;
-  }
+  },
 ): void {
   if (options.json && handlers.json) {
     jsonOutput(handlers.json());

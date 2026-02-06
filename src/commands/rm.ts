@@ -1,9 +1,12 @@
 import chalk from "chalk";
-import { getUnlockedVault } from "./common";
 import { EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
+import { getUnlockedVault } from "./common";
 
-export async function rm(name: string, options: OutputOptions = {}): Promise<void> {
+export async function rm(
+  name: string,
+  options: OutputOptions = {},
+): Promise<void> {
   const vault = await getUnlockedVault(options);
   const removed = vault.removeSecret(name);
   if (removed) {

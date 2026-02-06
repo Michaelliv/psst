@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { escapeEnvValue } from "./export";
 
 describe("export", () => {
@@ -41,8 +41,8 @@ describe("export", () => {
       const value = 'complex "value" with\nnewlines and $vars';
       const escaped = escapeEnvValue(value);
       expect(escaped).toContain('\\"');
-      expect(escaped).toContain('\\n');
-      expect(escaped).toContain('\\$');
+      expect(escaped).toContain("\\n");
+      expect(escaped).toContain("\\$");
       expect(escaped.startsWith('"')).toBe(true);
       expect(escaped.endsWith('"')).toBe(true);
     });
@@ -52,7 +52,9 @@ describe("export", () => {
     });
 
     it("handles URL values", () => {
-      expect(escapeEnvValue("https://example.com/path?key=value")).toBe("https://example.com/path?key=value");
+      expect(escapeEnvValue("https://example.com/path?key=value")).toBe(
+        "https://example.com/path?key=value",
+      );
     });
 
     it("handles base64 values", () => {

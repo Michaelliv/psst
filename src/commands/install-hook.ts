@@ -1,6 +1,6 @@
+import { chmodSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import chalk from "chalk";
-import { existsSync, chmodSync } from "fs";
-import { join } from "path";
 import { EXIT_ERROR, EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 
@@ -18,7 +18,10 @@ psst scan --staged --quiet
 exit $?
 `;
 
-export async function installHook(args: string[], options: OutputOptions = {}): Promise<void> {
+export async function installHook(
+  args: string[],
+  options: OutputOptions = {},
+): Promise<void> {
   const force = args.includes("--force") || args.includes("-f");
 
   // Find .git directory
@@ -43,7 +46,13 @@ export async function installHook(args: string[], options: OutputOptions = {}): 
     const existingContent = await Bun.file(hookPath).text();
     if (existingContent.includes("psst scan")) {
       if (options.json) {
-        console.log(JSON.stringify({ success: true, message: "already_installed", path: hookPath }));
+        console.log(
+          JSON.stringify({
+            success: true,
+            message: "already_installed",
+            path: hookPath,
+          }),
+        );
       } else if (!options.quiet) {
         console.log(chalk.green("✓"), "Pre-commit hook already installed");
         console.log(chalk.dim(`  ${hookPath}`));
@@ -53,7 +62,13 @@ export async function installHook(args: string[], options: OutputOptions = {}): 
 
     // Different hook exists
     if (options.json) {
-      console.log(JSON.stringify({ success: false, error: "hook_exists", path: hookPath }));
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: "hook_exists",
+          path: hookPath,
+        }),
+      );
     } else if (!options.quiet) {
       console.error(chalk.red("✗"), "Pre-commit hook already exists");
       console.log(chalk.dim(`  ${hookPath}`));
@@ -73,8 +88,13 @@ export async function installHook(args: string[], options: OutputOptions = {}): 
       console.log(chalk.green("✓"), "Pre-commit hook installed");
       console.log(chalk.dim(`  ${hookPath}`));
       console.log();
-      console.log("Staged files will be scanned for secrets before each commit.");
-      console.log(chalk.dim("  Bypass with:"), chalk.cyan("PSST_SKIP_SCAN=1 git commit"));
+      console.log(
+        "Staged files will be scanned for secrets before each commit.",
+      );
+      console.log(
+        chalk.dim("  Bypass with:"),
+        chalk.cyan("PSST_SKIP_SCAN=1 git commit"),
+      );
       console.log(chalk.dim("  Or use:"), chalk.cyan("git commit --no-verify"));
       console.log();
     }

@@ -1,5 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
-import { output, jsonOutput, header, success, info, warn, error, bold, dim, cmd, bullet, bulletDim, hint, nextStep, type OutputOptions } from "./output";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import {
+  bold,
+  bullet,
+  bulletDim,
+  cmd,
+  dim,
+  error,
+  header,
+  hint,
+  info,
+  jsonOutput,
+  nextStep,
+  type OutputOptions,
+  output,
+  success,
+  warn,
+} from "./output";
 
 describe("output utilities", () => {
   let consoleSpy: ReturnType<typeof spyOn>;
@@ -166,9 +182,11 @@ describe("output utilities", () => {
 
     beforeEach(() => {
       errorOutput = [];
-      consoleErrorSpy = spyOn(console, "error").mockImplementation((...args) => {
-        errorOutput.push(args.join(" "));
-      });
+      consoleErrorSpy = spyOn(console, "error").mockImplementation(
+        (...args) => {
+          errorOutput.push(args.join(" "));
+        },
+      );
     });
 
     afterEach(() => {
@@ -177,42 +195,48 @@ describe("output utilities", () => {
 
     it("success outputs with checkmark", () => {
       success("Operation complete");
-      expect(consoleOutput.some(o => o.includes("Operation complete"))).toBe(true);
+      expect(consoleOutput.some((o) => o.includes("Operation complete"))).toBe(
+        true,
+      );
     });
 
     it("info outputs with info symbol", () => {
       info("Some information");
-      expect(consoleOutput.some(o => o.includes("Some information"))).toBe(true);
+      expect(consoleOutput.some((o) => o.includes("Some information"))).toBe(
+        true,
+      );
     });
 
     it("warn outputs with warning symbol", () => {
       warn("Warning message");
-      expect(consoleOutput.some(o => o.includes("Warning message"))).toBe(true);
+      expect(consoleOutput.some((o) => o.includes("Warning message"))).toBe(
+        true,
+      );
     });
 
     it("error outputs to stderr", () => {
       error("Error message");
-      expect(errorOutput.some(o => o.includes("Error message"))).toBe(true);
+      expect(errorOutput.some((o) => o.includes("Error message"))).toBe(true);
     });
 
     it("bullet outputs with bullet point", () => {
       bullet("Bullet item");
-      expect(consoleOutput.some(o => o.includes("Bullet item"))).toBe(true);
+      expect(consoleOutput.some((o) => o.includes("Bullet item"))).toBe(true);
     });
 
     it("bulletDim outputs dimmed bullet", () => {
       bulletDim("Dim bullet");
-      expect(consoleOutput.some(o => o.includes("Dim bullet"))).toBe(true);
+      expect(consoleOutput.some((o) => o.includes("Dim bullet"))).toBe(true);
     });
 
     it("hint outputs indented text", () => {
       hint("Hint text");
-      expect(consoleOutput.some(o => o.includes("Hint text"))).toBe(true);
+      expect(consoleOutput.some((o) => o.includes("Hint text"))).toBe(true);
     });
 
     it("nextStep outputs command", () => {
       nextStep("npm install");
-      expect(consoleOutput.some(o => o.includes("npm install"))).toBe(true);
+      expect(consoleOutput.some((o) => o.includes("npm install"))).toBe(true);
     });
   });
 
