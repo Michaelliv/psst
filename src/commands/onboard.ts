@@ -1,89 +1,62 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import chalk from "chalk";
 import type { OutputOptions } from "../utils/output";
 
 const PSST_INSTRUCTIONS = `
-## Secrets Management (psst)
+<psst>
+Use \`psst\` for secrets management. Secrets are stored in vaults (local or global) and injected into commands without exposing values.
 
-This project uses **psst** for secrets management. You can use secrets without seeing their values.
+<commands>
+- \`psst <SECRET_NAME> -- <command>\` - Inject specific secret and run command
+- \`psst --global <SECRET_NAME> -- <command>\` - Inject from global vault
+- \`psst --global run '<full command>'\` - Inject all global secrets (wrap command in single quotes)
+- \`psst list\` - List local vault secrets
+- \`psst --global list\` - List global vault secrets
+- \`psst set <NAME>\` - Add secret to local vault
+- \`psst --global set <NAME>\` - Add secret to global vault
+</commands>
 
-### Using Secrets
+<examples>
+- \`psst STRIPE_KEY -- curl -H "Authorization: Bearer $STRIPE_KEY" https://api.stripe.com\`
+- \`psst --global MOTHERDUCK_TOKEN -- duckdb < query.sql\`
+- \`psst --global run 'duckdb -c "SELECT 42 as test"'\`
+</examples>
 
-\`\`\`bash
-psst <SECRET_NAME> -- <command>
-\`\`\`
+<when-to-use>
+- Running commands that need API keys, tokens, or credentials
+- Querying databases that require auth tokens
+- Any command that needs a secret value
+</when-to-use>
 
-Examples:
-\`\`\`bash
-psst STRIPE_KEY -- curl -H "Authorization: Bearer $STRIPE_KEY" https://api.stripe.com
-psst AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY -- aws s3 ls
-psst DATABASE_URL -- prisma migrate deploy
-\`\`\`
+<gotcha>
+\`psst -- <command>\` splits args by shell rules. Semicolons, pipes, and multi-statement commands break.
+Two workarounds:
+- Pipe from a file: \`psst --global TOKEN -- duckdb < query.sql\`
+- Use \`psst run\` with the full command as a single-quoted string: \`psst --global run 'duckdb -c "ATTACH ...; SELECT ..."'\`
+  Inner single quotes escape as \`'"'"'\`
+</gotcha>
 
-**Note:** Secret values are automatically redacted in command output (replaced with \`[REDACTED]\`).
-
-### Environments
-
-If this project uses multiple environments (dev/staging/prod), use the \`--env\` flag:
-
-\`\`\`bash
-psst --env prod API_KEY -- curl https://api.example.com
-psst --env dev list
-\`\`\`
-
-### Available Secrets
-
-\`\`\`bash
-psst list                     # Human-readable list
-psst list --json              # Structured output
-psst list envs                # List available environments
-\`\`\`
-
-### Missing a Secret?
-
-psst automatically checks environment variables as a fallback. If neither the vault nor the environment has the secret, ask the user to add it:
-
-> "I need \`STRIPE_KEY\` to proceed. Please run \`psst set STRIPE_KEY\` to add it."
-
-### Important
-
-- **Never** try to read secrets with \`psst get\` or by other means
-- **Never** ask the user to paste secrets into the chat
-- **Always** use the \`psst SECRET -- command\` pattern
-
-### If the Human Tries to Paste a Secret
-
-If the user pastes a raw API key, password, or secret into the chat, gently shame them:
-
-> "Whoa there! You just pasted a secret in plain text. That's now in your chat history, possibly in logs, and who knows where else.
->
-> Let's fix that. Run:
-> \`\`\`
-> psst set SECRET_NAME
-> \`\`\`
-> Then I'll use \`psst SECRET_NAME -- <command>\` instead. Your secret stays secret, and we both sleep better at night."
-
-Then remind them about the Hall of Shame: https://github.com/Michaelliv/psst#the-hall-of-shame
+<rules>
+- NEVER try to read secrets with \`psst get\` or by other means
+- NEVER ask the user to paste secrets into the chat
+- ALWAYS use the \`psst SECRET -- command\` pattern
+- If a secret is missing, ask the user: "Please run \`psst set SECRET_NAME\` to add it."
+- Secret values are automatically redacted in output (replaced with \`[REDACTED]\`)
+</rules>
+</psst>
 `.trim();
 
-const MARKER = "## Secrets Management (psst)";
+const MARKER = "<psst>";
 
 export async function onboard(options: OutputOptions = {}): Promise<void> {
-  const cwd = process.cwd();
+  const claudeDir = join(homedir(), ".claude");
+  const targetFile = join(claudeDir, "CLAUDE.md");
 
-  const claudeMd = join(cwd, "CLAUDE.md");
-  const agentsMd = join(cwd, "AGENTS.md");
-
-  let targetFile: string | null = null;
   let existingContent = "";
-
-  if (existsSync(claudeMd)) {
-    targetFile = claudeMd;
-    existingContent = readFileSync(claudeMd, "utf-8");
-  } else if (existsSync(agentsMd)) {
-    targetFile = agentsMd;
-    existingContent = readFileSync(agentsMd, "utf-8");
+  if (existsSync(targetFile)) {
+    existingContent = readFileSync(targetFile, "utf-8");
   }
 
   // Check if already onboarded - this is idempotent, so it's success
@@ -103,12 +76,16 @@ export async function onboard(options: OutputOptions = {}): Promise<void> {
     return;
   }
 
-  if (targetFile) {
+  // Ensure ~/.claude/ exists
+  if (!existsSync(claudeDir)) {
+    mkdirSync(claudeDir, { recursive: true });
+  }
+
+  if (existingContent) {
     const newContent = `${existingContent.trimEnd()}\n\n${PSST_INSTRUCTIONS}\n`;
     writeFileSync(targetFile, newContent);
   } else {
-    writeFileSync(agentsMd, `${PSST_INSTRUCTIONS}\n`);
-    targetFile = agentsMd;
+    writeFileSync(targetFile, `${PSST_INSTRUCTIONS}\n`);
   }
 
   if (options.json) {
