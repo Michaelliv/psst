@@ -18,6 +18,8 @@ import { scan } from "./commands/scan";
 import { installHook } from "./commands/install-hook";
 import { installHooks } from "./commands/install-hooks";
 import { tag, untag } from "./commands/tag";
+import { history } from "./commands/history";
+import { rollback } from "./commands/rollback";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -41,6 +43,8 @@ SECRET MANAGEMENT
   psst rm <NAME>                Remove secret
   psst tag <NAME> <t1> [t2...]  Add tags to secret
   psst untag <NAME> <t1>...     Remove tags from secret
+  psst history <NAME>           Show version history for secret
+  psst rollback <NAME> --to N   Restore secret to version N
 
 IMPORT/EXPORT
   psst import <file>            Import secrets from .env file
@@ -283,6 +287,44 @@ async function main() {
     case "untag":
       await untag(cleanArgs.slice(1), options);
       break;
+
+    case "history":
+      if (!cleanArgs[1]) {
+        if (json) {
+          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+        } else if (!quiet) {
+          console.error("Error: Secret name required");
+          console.error("Usage: psst history <NAME>");
+        }
+        process.exit(1);
+      }
+      await history(cleanArgs[1], options);
+      break;
+
+    case "rollback": {
+      if (!cleanArgs[1]) {
+        if (json) {
+          console.log(JSON.stringify({ success: false, error: "missing_name" }));
+        } else if (!quiet) {
+          console.error("Error: Secret name required");
+          console.error("Usage: psst rollback <NAME> --to <version>");
+        }
+        process.exit(1);
+      }
+      const toIndex = cleanArgs.indexOf("--to");
+      if (toIndex === -1 || !cleanArgs[toIndex + 1]) {
+        if (json) {
+          console.log(JSON.stringify({ success: false, error: "missing_version" }));
+        } else if (!quiet) {
+          console.error("Error: --to <version> required");
+          console.error("Usage: psst rollback <NAME> --to <version>");
+        }
+        process.exit(1);
+      }
+      const targetVersion = parseInt(cleanArgs[toIndex + 1], 10);
+      await rollback(cleanArgs[1], targetVersion, options);
+      break;
+    }
 
     case "run": {
       const runNoMask = cleanArgs.includes("--no-mask");

@@ -597,6 +597,230 @@ describe("Vault unit tests", () => {
     });
   });
 
+  describe("history and rollback", () => {
+    it("returns empty history for new secret", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "value1");
+      const history = vault.getHistory("KEY");
+
+      vault.close();
+
+      expect(history).toEqual([]);
+    });
+
+    it("archives previous value on update", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "v1");
+      await vault.setSecret("KEY", "v2");
+      const history = vault.getHistory("KEY");
+
+      vault.close();
+
+      expect(history.length).toBe(1);
+      expect(history[0].version).toBe(1);
+    });
+
+    it("decrypts archived values correctly", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "original-value");
+      await vault.setSecret("KEY", "new-value");
+
+      const archivedValue = await vault.getHistoryVersion("KEY", 1);
+
+      vault.close();
+
+      expect(archivedValue).toBe("original-value");
+    });
+
+    it("multiple updates create incrementing versions", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "v1");
+      await vault.setSecret("KEY", "v2");
+      await vault.setSecret("KEY", "v3");
+      await vault.setSecret("KEY", "v4");
+
+      const history = vault.getHistory("KEY");
+
+      vault.close();
+
+      expect(history.length).toBe(3);
+      // Newest first
+      expect(history[0].version).toBe(3);
+      expect(history[1].version).toBe(2);
+      expect(history[2].version).toBe(1);
+    });
+
+    it("decrypts all archived versions correctly", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "first");
+      await vault.setSecret("KEY", "second");
+      await vault.setSecret("KEY", "third");
+
+      const v1 = await vault.getHistoryVersion("KEY", 1);
+      const v2 = await vault.getHistoryVersion("KEY", 2);
+
+      vault.close();
+
+      expect(v1).toBe("first");
+      expect(v2).toBe("second");
+    });
+
+    it("rollback restores value and archives current", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "v1");
+      await vault.setSecret("KEY", "v2");
+      await vault.setSecret("KEY", "v3");
+
+      // History: v1(1), v2(2)
+      const success = await vault.rollback("KEY", 1);
+      expect(success).toBe(true);
+
+      const current = await vault.getSecret("KEY");
+      expect(current).toBe("v1");
+
+      // Current v3 should now be archived as v3
+      const history = vault.getHistory("KEY");
+      expect(history.length).toBe(3);
+      expect(history[0].version).toBe(3); // archived v3 (was current)
+      expect(history[1].version).toBe(2);
+      expect(history[2].version).toBe(1);
+
+      vault.close();
+    });
+
+    it("rollback returns false for non-existent version", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "v1");
+      const success = await vault.rollback("KEY", 99);
+
+      vault.close();
+
+      expect(success).toBe(false);
+    });
+
+    it("rollback returns false for non-existent secret", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      const success = await vault.rollback("NONEXISTENT", 1);
+
+      vault.close();
+
+      expect(success).toBe(false);
+    });
+
+    it("clearHistory removes all history", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "v1");
+      await vault.setSecret("KEY", "v2");
+      await vault.setSecret("KEY", "v3");
+
+      vault.clearHistory("KEY");
+      const history = vault.getHistory("KEY");
+
+      vault.close();
+
+      expect(history).toEqual([]);
+    });
+
+    it("pruning keeps only last 10 versions", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      // Create 13 versions (12 updates = 12 history entries, pruned to 10)
+      for (let i = 1; i <= 13; i++) {
+        await vault.setSecret("KEY", `value-${i}`);
+      }
+
+      const history = vault.getHistory("KEY");
+
+      vault.close();
+
+      expect(history.length).toBe(10);
+      // Oldest versions should be pruned
+      expect(history[history.length - 1].version).toBe(3);
+      expect(history[0].version).toBe(12);
+    });
+
+    it("tags preserved at time of archival", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "v1", ["aws", "prod"]);
+      await vault.setSecret("KEY", "v2", ["gcp"]);
+
+      const history = vault.getHistory("KEY");
+
+      vault.close();
+
+      expect(history[0].tags).toEqual(["aws", "prod"]);
+    });
+
+    it("history persists across vault instances", async () => {
+      const vault1 = new Vault(vaultPath);
+      await vault1.unlock();
+
+      await vault1.setSecret("KEY", "v1");
+      await vault1.setSecret("KEY", "v2");
+      vault1.close();
+
+      const vault2 = new Vault(vaultPath);
+      await vault2.unlock();
+
+      const history = vault2.getHistory("KEY");
+      const archivedValue = await vault2.getHistoryVersion("KEY", 1);
+      vault2.close();
+
+      expect(history.length).toBe(1);
+      expect(history[0].version).toBe(1);
+      expect(archivedValue).toBe("v1");
+    });
+
+    it("getHistoryVersion returns null for non-existent version", async () => {
+      const vault = new Vault(vaultPath);
+      await vault.unlock();
+
+      await vault.setSecret("KEY", "v1");
+      const value = await vault.getHistoryVersion("KEY", 99);
+
+      vault.close();
+
+      expect(value).toBeNull();
+    });
+
+    it("getHistoryVersion throws when vault is locked", async () => {
+      const vault = new Vault(vaultPath);
+
+      await expect(vault.getHistoryVersion("KEY", 1)).rejects.toThrow("Vault is locked");
+
+      vault.close();
+    });
+
+    it("rollback throws when vault is locked", async () => {
+      const vault = new Vault(vaultPath);
+
+      await expect(vault.rollback("KEY", 1)).rejects.toThrow("Vault is locked");
+
+      vault.close();
+    });
+  });
+
   describe("persistence", () => {
     it("persists secrets across vault instances", async () => {
       // First instance - write

@@ -190,6 +190,30 @@ PSST_SKIP_SCAN=1 git commit -m "message"
 git commit --no-verify
 ```
 
+### Secret History & Rollback
+
+Accidentally overwritten a secret? psst keeps the last 10 versions automatically.
+
+```bash
+# View version history
+psst history API_KEY
+
+# History for API_KEY
+#
+# ● current (active)
+# ● v2  01/15/2026 14:30
+# ● v1  01/10/2026 09:15
+#
+# 2 previous version(s)
+#   Rollback: psst rollback API_KEY --to <version>
+
+# Restore a previous version
+psst rollback API_KEY --to 1
+# ✓ Rolled back API_KEY to v1
+```
+
+Rollback is reversible — the current value is archived before restoring, so you can always undo.
+
 ### Secret Tags
 
 Organize secrets with tags for easier management:
