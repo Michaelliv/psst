@@ -28,7 +28,7 @@ VAULT MANAGEMENT
   psst init                     Create local vault (.psst/)
   psst init --global            Create global vault (~/.psst/)
   psst init --env <name>        Create vault for specific environment
-  psst onboard                  Add psst instructions to CLAUDE.md/AGENTS.md
+  psst onboard                  Add psst instructions to ~/.claude/CLAUDE.md
   psst lock                     Lock vault (encrypt at rest)
   psst unlock                   Unlock vault
   psst list envs                List available environments
