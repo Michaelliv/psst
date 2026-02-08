@@ -55,7 +55,7 @@ You set up psst once. Then your agent handles the rest.
 ### Installation
 
 ```bash
-npm install -g @pssst/cli
+npm install -g psst-cli
 ```
 
 ### Setup (one-time)
