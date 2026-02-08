@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import chalk from "chalk";
-import ora from "ora";
 import { EXIT_USER_ERROR } from "../utils/exit-codes";
 import { readStdin } from "../utils/input";
 import type { OutputOptions } from "../utils/output";
@@ -68,9 +67,6 @@ export async function importSecrets(
     return;
   }
 
-  const useSpinner = !options.json && !options.quiet && entries.length > 3;
-  const spinner = useSpinner ? ora("Importing secrets...").start() : null;
-
   let imported = 0;
   let skipped = 0;
 
@@ -90,15 +86,11 @@ export async function importSecrets(
     return;
   }
 
-  spinner?.succeed(`Imported ${imported} secret(s)`);
-
   if (!options.quiet) {
-    if (!useSpinner) {
-      console.log(
-        chalk.green("✓"),
-        `Imported ${chalk.bold(imported)} secret(s)`,
-      );
-    }
+    console.log(
+      chalk.green("✓"),
+      `Imported ${chalk.bold(imported)} secret(s)`,
+    );
     if (skipped > 0) {
       console.log(chalk.dim(`  Skipped ${skipped} invalid entries`));
     }

@@ -1,7 +1,6 @@
 import { existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
-import ora from "ora";
 import {
   EXIT_ERROR,
   EXIT_LOCKED,
@@ -76,9 +75,6 @@ export async function lock(options: OutputOptions = {}): Promise<void> {
     process.exit(EXIT_USER_ERROR);
   }
 
-  const useSpinner = !options.json && !options.quiet;
-  const spinner = useSpinner ? ora("Encrypting vault...").start() : null;
-
   try {
     // Get the current keychain key to preserve it
     const keyResult = await getKey();
@@ -87,13 +83,11 @@ export async function lock(options: OutputOptions = {}): Promise<void> {
     if (!vaultKey) {
       if (options.json) {
         console.log(JSON.stringify({ success: false, error: "no_key" }));
-      } else {
-        spinner?.fail("No vault key found");
-        if (!options.quiet) {
-          console.error(
-            chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"),
-          );
-        }
+      } else if (!options.quiet) {
+        console.error(chalk.red("✗"), "No vault key found");
+        console.error(
+          chalk.dim("  Ensure keychain is available or set PSST_PASSWORD"),
+        );
       }
       process.exit(EXIT_ERROR);
     }
@@ -117,17 +111,15 @@ export async function lock(options: OutputOptions = {}): Promise<void> {
 
     if (options.json) {
       console.log(JSON.stringify({ success: true }));
-    } else {
-      spinner?.succeed("Vault locked");
+    } else if (!options.quiet) {
+      console.log(chalk.green("✓"), "Vault locked");
     }
   } catch (err: any) {
     if (options.json) {
       console.log(JSON.stringify({ success: false, error: err.message }));
-    } else {
-      spinner?.fail("Failed to lock vault");
-      if (!options.quiet) {
-        console.error(chalk.dim(`  ${err.message}`));
-      }
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), "Failed to lock vault");
+      console.error(chalk.dim(`  ${err.message}`));
     }
     process.exit(EXIT_ERROR);
   }

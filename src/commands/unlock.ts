@@ -2,7 +2,6 @@ import { existsSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import chalk from "chalk";
-import ora from "ora";
 import {
   EXIT_AUTH_FAILED,
   EXIT_ERROR,
@@ -105,9 +104,6 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
     process.exit(EXIT_USER_ERROR);
   }
 
-  const useSpinner = !options.json && !options.quiet;
-  const spinner = useSpinner ? ora("Decrypting vault...").start() : null;
-
   try {
     const encryptedData = await Bun.file(lockedPath).arrayBuffer();
 
@@ -119,8 +115,8 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
         console.log(
           JSON.stringify({ success: false, error: "invalid_password" }),
         );
-      } else {
-        spinner?.fail("Invalid password");
+      } else if (!options.quiet) {
+        console.error(chalk.red("✗"), "Invalid password");
       }
       process.exit(EXIT_AUTH_FAILED);
     }
@@ -139,17 +135,15 @@ export async function unlock(options: OutputOptions = {}): Promise<void> {
 
     if (options.json) {
       console.log(JSON.stringify({ success: true }));
-    } else {
-      spinner?.succeed("Vault unlocked");
+    } else if (!options.quiet) {
+      console.log(chalk.green("✓"), "Vault unlocked");
     }
   } catch (err: any) {
     if (options.json) {
       console.log(JSON.stringify({ success: false, error: err.message }));
-    } else {
-      spinner?.fail("Failed to unlock vault");
-      if (!options.quiet) {
-        console.error(chalk.dim(`  ${err.message}`));
-      }
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), "Failed to unlock vault");
+      console.error(chalk.dim(`  ${err.message}`));
     }
     process.exit(EXIT_ERROR);
   }

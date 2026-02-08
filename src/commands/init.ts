@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
-import ora from "ora";
 import { EXIT_ERROR, EXIT_USER_ERROR } from "../utils/exit-codes";
 import type { OutputOptions } from "../utils/output";
 import { Vault } from "../vault/vault";
@@ -51,11 +50,6 @@ export async function init(
     process.exit(EXIT_USER_ERROR);
   }
 
-  const useSpinner = !options.json && !options.quiet;
-  const spinner = useSpinner
-    ? ora(`Creating ${scope} vault for "${env}"...`).start()
-    : null;
-
   const result = await Vault.initializeVault(vaultPath);
 
   if (result.success) {
@@ -66,9 +60,12 @@ export async function init(
       return;
     }
 
-    spinner?.succeed(
-      `${scope.charAt(0).toUpperCase() + scope.slice(1)} vault created for "${env}"`,
-    );
+    if (!options.quiet) {
+      console.log(
+        chalk.green("✓"),
+        `${scope.charAt(0).toUpperCase() + scope.slice(1)} vault created for "${env}"`,
+      );
+    }
 
     if (!options.quiet) {
       console.log(chalk.dim(`  ${vaultPath}`));
@@ -87,8 +84,8 @@ export async function init(
         JSON.stringify({ success: false, error: result.error, env, scope }),
       );
     } else {
-      spinner?.fail("Failed to create vault");
       if (!options.quiet) {
+        console.error(chalk.red("✗"), "Failed to create vault");
         console.error(chalk.dim(`  ${result.error}`));
       }
     }
