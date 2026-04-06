@@ -29,15 +29,25 @@ export interface SecretHistoryEntry {
   archived_at: string;
 }
 
+export interface VaultOptions {
+  /** Encryption key (base64 or password string). Skips keychain/env var lookup. */
+  key?: string;
+}
+
 export class Vault {
   private db: Database;
   private key: Buffer | null = null;
+  readonly vaultPath: string;
 
-  constructor(vaultPath: string) {
+  constructor(vaultPath: string, options?: VaultOptions) {
     this.vaultPath = vaultPath;
     const dbPath = join(vaultPath, DB_NAME);
     this.db = new Database(dbPath);
     this.initSchema();
+
+    if (options?.key) {
+      this.key = keyToBuffer(options.key);
+    }
   }
 
   private initSchema() {
@@ -79,9 +89,12 @@ export class Vault {
   }
 
   /**
-   * Unlock vault using keychain or fallback password
+   * Unlock vault using keychain or fallback password.
+   * Not needed if key was provided in constructor options.
    */
   async unlock(): Promise<boolean> {
+    if (this.key) return true;
+
     // Try keychain first
     const keychainResult = await getKey();
 
@@ -349,12 +362,30 @@ export class Vault {
   }
 
   /**
-   * Initialize a new vault with keychain-stored key
+   * Initialize a new vault directory and database.
+   *
+   * When called without options, generates a key and stores it in the OS keychain
+   * (CLI mode). When using the SDK with a custom key, pass `{ skipKeychain: true }`
+   * to just create the directory and database — you'll provide the key via the
+   * constructor instead.
    */
   static async initializeVault(
     vaultPath: string,
+    options?: { skipKeychain?: boolean },
   ): Promise<{ success: boolean; error?: string }> {
-    // Check if keychain is available
+    // Create vault directory
+    if (!existsSync(vaultPath)) {
+      mkdirSync(vaultPath, { recursive: true });
+    }
+
+    // SDK mode: just create the directory and database
+    if (options?.skipKeychain) {
+      const vault = new Vault(vaultPath);
+      vault.close();
+      return { success: true };
+    }
+
+    // CLI mode: set up keychain key
     const hasKeychain = await isKeychainAvailable();
 
     if (!hasKeychain && !process.env.PSST_PASSWORD) {
@@ -372,21 +403,14 @@ export class Vault {
       const storeResult = await storeKey(key);
 
       if (!storeResult.success) {
-        // Keychain failed, check for fallback
         if (!process.env.PSST_PASSWORD) {
           return {
             success: false,
             error: `Keychain error: ${storeResult.error}. Set PSST_PASSWORD as fallback.`,
           };
         }
-        // Use PSST_PASSWORD as key (user is responsible for it)
         console.log("Note: Using PSST_PASSWORD (keychain not available)");
       }
-    }
-
-    // Create vault directory and database
-    if (!existsSync(vaultPath)) {
-      mkdirSync(vaultPath, { recursive: true });
     }
 
     // Initialize database

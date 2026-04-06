@@ -310,6 +310,45 @@ Ask the human to add it:
 
 ---
 
+## SDK
+
+psst is also a library. Requires Bun runtime.
+
+```typescript
+import { Vault } from "psst-cli";
+
+// Pass the key directly — no unlock step, no keychain, no env vars
+const vault = new Vault("/path/to/.psst", { key: "your-secret-key" });
+
+// Read and write secrets
+await vault.setSecret("API_KEY", "sk-live-abc123", ["prod"]);
+const secret = await vault.getSecret("API_KEY");
+const all = vault.listSecrets();
+
+// History and rollback
+const history = vault.getHistory("API_KEY");
+await vault.rollback("API_KEY", 1);
+
+vault.close();
+```
+
+Create a new vault programmatically:
+
+```typescript
+import { Vault } from "psst-cli";
+
+const vaultPath = "/app/.psst";
+await Vault.initializeVault(vaultPath, { skipKeychain: true });
+
+const vault = new Vault(vaultPath, { key: "your-secret-key" });
+await vault.setSecret("DB_URL", "postgres://...");
+vault.close();
+```
+
+Works in Docker, CI, or anywhere — no OS keychain required.
+
+---
+
 ## CI / Headless Environments
 
 When keychain isn't available, use the `PSST_PASSWORD` environment variable:

@@ -27,14 +27,14 @@ export async function encrypt(
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
-    { name: "AES-GCM" },
+    new Uint8Array(key),
+    "AES-GCM",
     false,
     ["encrypt"],
   );
 
   const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv: new Uint8Array(iv) },
     cryptoKey,
     new TextEncoder().encode(plaintext),
   );
@@ -52,16 +52,16 @@ export async function decrypt(
 ): Promise<string> {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
-    { name: "AES-GCM" },
+    new Uint8Array(key),
+    "AES-GCM",
     false,
     ["decrypt"],
   );
 
   const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv: new Uint8Array(iv) },
     cryptoKey,
-    encrypted,
+    new Uint8Array(encrypted),
   );
 
   return new TextDecoder().decode(decrypted);
