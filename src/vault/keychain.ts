@@ -160,49 +160,6 @@ export async function getKey(): Promise<KeychainResult> {
 }
 
 /**
- * Delete key from OS keychain
- */
-export async function deleteKey(): Promise<KeychainResult> {
-  try {
-    if (process.platform === "darwin") {
-      const result = await run([
-        "security",
-        "delete-generic-password",
-        "-s",
-        SERVICE_NAME,
-        "-a",
-        ACCOUNT_NAME,
-      ]);
-      return { success: result.exitCode === 0 };
-    }
-
-    if (process.platform === "linux") {
-      const result = await run([
-        "secret-tool",
-        "clear",
-        "service",
-        SERVICE_NAME,
-        "account",
-        ACCOUNT_NAME,
-      ]);
-      return { success: result.exitCode === 0 };
-    }
-
-    if (process.platform === "win32") {
-      const result = await run(["cmdkey", `/delete:${SERVICE_NAME}`]);
-      return { success: result.exitCode === 0 };
-    }
-
-    return {
-      success: false,
-      error: `Unsupported platform: ${process.platform}`,
-    };
-  } catch (err: any) {
-    return { success: false, error: err?.message || String(err) };
-  }
-}
-
-/**
  * Check if keychain is available on this system
  */
 export async function isKeychainAvailable(): Promise<boolean> {

@@ -7,19 +7,14 @@ import { get } from "./commands/get";
 import { history } from "./commands/history";
 import { importSecrets } from "./commands/import";
 import { init } from "./commands/init";
-import { installHook } from "./commands/install-hook";
-import { installHooks } from "./commands/install-hooks";
 import { list } from "./commands/list";
 import { listEnvs } from "./commands/list-envs";
-import { lock } from "./commands/lock";
-import { onboard } from "./commands/onboard";
 import { rm } from "./commands/rm";
 import { rollback } from "./commands/rollback";
 import { run } from "./commands/run";
 import { scan } from "./commands/scan";
 import { set } from "./commands/set";
 import { tag, untag } from "./commands/tag";
-import { unlock } from "./commands/unlock";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -28,9 +23,6 @@ VAULT MANAGEMENT
   psst init                     Create local vault (.psst/)
   psst init --global            Create global vault (~/.psst/)
   psst init --env <name>        Create vault for specific environment
-  psst onboard                  Add psst instructions to ~/.claude/CLAUDE.md
-  psst lock                     Lock vault (encrypt at rest)
-  psst unlock                   Unlock vault
   psst list envs                List available environments
 
 SECRET MANAGEMENT
@@ -63,11 +55,6 @@ SECRET SCANNING
   psst scan                       Scan files for leaked secrets
   psst scan --staged              Scan only git staged files
   psst scan --path <dir>          Scan specific directory
-  psst install-hook               Install git pre-commit hook
-
-AGENT PROTECTION
-  psst install-hooks              Install Claude Code protection hooks
-  psst install-hooks --global     Install hooks globally (~/.claude/)
 
 OPTIONS
   --no-mask                       Disable output masking (for debugging)
@@ -202,10 +189,6 @@ async function main() {
       await init(cleanArgs.slice(1), options);
       break;
 
-    case "onboard":
-      await onboard(options);
-      break;
-
     case "set": {
       if (!cleanArgs[1]) {
         if (json) {
@@ -297,24 +280,8 @@ async function main() {
       break;
     }
 
-    case "lock":
-      await lock(options);
-      break;
-
-    case "unlock":
-      await unlock(options);
-      break;
-
     case "scan":
       await scan(cleanArgs.slice(1), options);
-      break;
-
-    case "install-hook":
-      await installHook(cleanArgs.slice(1), options);
-      break;
-
-    case "install-hooks":
-      await installHooks(cleanArgs.slice(1), options);
       break;
 
     case "tag":

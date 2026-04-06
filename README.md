@@ -73,16 +73,7 @@ psst set DATABASE_URL
 psst list
 ```
 
-That's it. Now onboard your agent:
-
-```bash
-psst onboard
-```
-
-This adds psst instructions to your `CLAUDE.md` or `AGENTS.md` file, teaching your agent:
-- How to use `psst SECRET -- command`
-- To ask you to add missing secrets
-- To **shame you** if you try to paste secrets in plain text 🤫
+That's it.
 
 ### Managing Secrets
 
@@ -99,10 +90,6 @@ psst import --stdin           # Import from stdin
 psst import --from-env        # Import from environment variables
 psst export                   # Export to stdout (.env format)
 psst export --env-file .env   # Export to file
-
-# Vault encryption (for backups/travel)
-psst lock                     # Encrypt vault at rest with password
-psst unlock                   # Decrypt vault
 ```
 
 ### Environments
@@ -166,9 +153,6 @@ Prevent accidentally committing secrets to git:
 psst scan                     # Scan all tracked files
 psst scan --staged            # Scan only git staged files
 psst scan --path ./src        # Scan specific directory
-
-# Install pre-commit hook (runs scan automatically)
-psst install-hook
 ```
 
 The scanner checks for **actual vault secret values** — no regex false positives. If a secret is found:
@@ -180,14 +164,6 @@ The scanner checks for **actual vault secret values** — no regex false positiv
     Contains: STRIPE_KEY
 
 Found 1 secret(s) in 1 file(s)
-  Tip: Use PSST_SKIP_SCAN=1 git commit to bypass
-```
-
-Bypass the hook when needed:
-```bash
-PSST_SKIP_SCAN=1 git commit -m "message"
-# or
-git commit --no-verify
 ```
 
 ### Secret History & Rollback
@@ -329,7 +305,6 @@ Ask the human to add it:
 - Secrets encrypted at rest (AES-256-GCM)
 - Encryption key stored in OS Keychain (macOS Keychain, libsecret, Windows Credential Manager)
 - Secrets automatically redacted in command output (`[REDACTED]`)
-- Optional vault lock with password for backups/travel
 - Secrets never exposed to agent context
 - Zero friction for legitimate use
 
