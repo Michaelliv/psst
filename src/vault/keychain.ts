@@ -7,19 +7,51 @@ export interface KeychainResult {
   error?: string;
 }
 
+const isBun = typeof globalThis.Bun !== "undefined";
+
 /**
- * Run a command and return stdout
+ * Run a command and return stdout.
+ * Uses Bun.spawnSync when available, falls back to Node child_process.
  */
 async function run(
   cmd: string[],
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawnSync(cmd);
+  if (isBun) {
+    const proc = Bun.spawnSync(cmd);
+    return {
+      exitCode: proc.exitCode,
+      stdout: proc.stdout.toString().trim(),
+      stderr: proc.stderr.toString().trim(),
+    };
+  }
 
+  const { spawnSync } = await import("node:child_process");
+  const result = spawnSync(cmd[0], cmd.slice(1), { encoding: "utf-8" });
   return {
-    exitCode: proc.exitCode,
-    stdout: proc.stdout.toString().trim(),
-    stderr: proc.stderr.toString().trim(),
+    exitCode: result.status ?? 1,
+    stdout: (result.stdout ?? "").trim(),
+    stderr: (result.stderr ?? "").trim(),
   };
+}
+
+/**
+ * Spawn a command with stdin input and return its exit code.
+ */
+async function spawnWithStdin(cmd: string[], input: string): Promise<number> {
+  if (isBun) {
+    const proc = Bun.spawn(cmd, { stdin: "pipe" });
+    proc.stdin.write(input);
+    proc.stdin.end();
+    return await proc.exited;
+  }
+
+  const { spawn } = await import("node:child_process");
+  return new Promise((resolve) => {
+    const proc = spawn(cmd[0], cmd.slice(1), { stdio: ["pipe", "ignore", "ignore"] });
+    proc.stdin!.write(input);
+    proc.stdin!.end();
+    proc.on("close", (code) => resolve(code ?? 1));
+  });
 }
 
 /**
@@ -49,8 +81,8 @@ export async function storeKey(key: string): Promise<KeychainResult> {
     }
 
     if (process.platform === "linux") {
-      // Linux: Use secret-tool (libsecret)
-      const proc = Bun.spawn(
+      // Linux: Use secret-tool (libsecret) — needs stdin pipe for the key
+      const exitCode = await spawnWithStdin(
         [
           "secret-tool",
           "store",
@@ -60,12 +92,8 @@ export async function storeKey(key: string): Promise<KeychainResult> {
           "account",
           ACCOUNT_NAME,
         ],
-        { stdin: "pipe" },
+        key,
       );
-      proc.stdin.write(key);
-      proc.stdin.end();
-
-      const exitCode = await proc.exited;
       if (exitCode === 0) {
         return { success: true };
       }
