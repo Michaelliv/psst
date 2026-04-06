@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { type SqliteDatabase, openDatabase } from "./database";
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -35,14 +35,14 @@ export interface VaultOptions {
 }
 
 export class Vault {
-  private db: Database;
+  private db: SqliteDatabase;
   private key: Buffer | null = null;
   readonly vaultPath: string;
 
   constructor(vaultPath: string, options?: VaultOptions) {
     this.vaultPath = vaultPath;
     const dbPath = join(vaultPath, DB_NAME);
-    this.db = new Database(dbPath);
+    this.db = openDatabase(dbPath);
     this.initSchema();
 
     if (options?.key) {
