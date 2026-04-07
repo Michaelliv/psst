@@ -35,6 +35,11 @@ export interface SqliteDatabase {
   close(): void;
 }
 
+import { createRequire } from "node:module";
+
+// createRequire works in both Bun and Node, and compiles cleanly to ESM.
+// `require` is not available in ESM module scope, so we synthesize one here.
+const require = createRequire(import.meta.url);
 const isBun = typeof globalThis.Bun !== "undefined";
 
 export function openDatabase(path: string): SqliteDatabase {
