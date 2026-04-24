@@ -430,6 +430,67 @@ describe("AwsBackend", () => {
       const list = await b.listSecrets();
       expect(list.map((s) => s.name)).toEqual(["A"]);
     });
+
+    it("exists returns false for unmanaged secret at same prefix", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      store.secrets.set("psst/FOREIGN", {
+        Name: "psst/FOREIGN",
+        Tags: [],
+        Versions: [
+          {
+            VersionId: "vid-f",
+            CreatedDate: new Date(),
+            SecretString: "x",
+            VersionStages: ["AWSCURRENT"],
+          },
+        ],
+      });
+      expect(await b.exists("FOREIGN")).toBe(false);
+    });
+
+    it("setSecret refuses to overwrite unmanaged secret", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      store.secrets.set("psst/EXTERNAL", {
+        Name: "psst/EXTERNAL",
+        Tags: [{ Key: "team", Value: "infra" }],
+        Versions: [
+          {
+            VersionId: "vid-e",
+            CreatedDate: new Date(),
+            SecretString: "do-not-touch",
+            VersionStages: ["AWSCURRENT"],
+          },
+        ],
+      });
+      await expect(b.setSecret("EXTERNAL", "overwrite")).rejects.toThrow(
+        /not managed by psst/,
+      );
+      // Original value preserved
+      const raw = store.secrets.get("psst/EXTERNAL")!;
+      const current = raw.Versions.find((v) =>
+        v.VersionStages.includes("AWSCURRENT"),
+      );
+      expect(current!.SecretString).toBe("do-not-touch");
+    });
+
+    it("removeSecret refuses to delete unmanaged secret", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      store.secrets.set("psst/EXTERNAL", {
+        Name: "psst/EXTERNAL",
+        Tags: [],
+        Versions: [
+          {
+            VersionId: "vid-e2",
+            CreatedDate: new Date(),
+            SecretString: "protected",
+            VersionStages: ["AWSCURRENT"],
+          },
+        ],
+      });
+      expect(await b.removeSecret("EXTERNAL")).toBe(false);
+      // Still exists in the store
+      expect(store.secrets.has("psst/EXTERNAL")).toBe(true);
+    });
   });
 
   describe("history and rollback", () => {

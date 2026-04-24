@@ -180,16 +180,39 @@ export class AwsBackend implements VaultBackend {
     return tags;
   }
 
-  async exists(name: string): Promise<boolean> {
+  /**
+   * Check whether an AWS secret exists AND has the psst:managed tag.
+   * Returns null if not found, false if found but unmanaged, true if managed.
+   */
+  private async isManagedSecret(
+    awsName: string,
+  ): Promise<boolean | null> {
     const { sdk, client } = await this.getClient();
-    const awsName = this.toAwsName(name);
     try {
-      await client.send(new sdk.DescribeSecretCommand({ SecretId: awsName }));
-      return true;
+      const resp: DescribeSecretCommandOutput = await client.send(
+        new sdk.DescribeSecretCommand({ SecretId: awsName }),
+      );
+      const tags = resp.Tags ?? [];
+      return tags.some(
+        (t) => t.Key === MANAGED_TAG_KEY && t.Value === MANAGED_TAG_VALUE,
+      );
     } catch (err) {
-      if (isAwsErrorNamed(err, "ResourceNotFoundException")) return false;
+      if (isAwsErrorNamed(err, "ResourceNotFoundException")) return null;
+      // During the ~15s window after ForceDeleteWithoutRecovery, AWS
+      // throws InvalidRequestException ("scheduled for deletion") instead
+      // of ResourceNotFoundException. Treat it as not-found so callers
+      // fall through to createSecretWithRetry which has backoff/restore.
+      if (isAwsErrorNamed(err, "InvalidRequestException")) {
+        const msg = String(errorMessage(err) ?? "");
+        if (/scheduled for deletion/i.test(msg)) return null;
+      }
       throw err;
     }
+  }
+
+  async exists(name: string): Promise<boolean> {
+    const managed = await this.isManagedSecret(this.toAwsName(name));
+    return managed === true;
   }
 
   async setSecret(name: string, value: string, tags?: string[]): Promise<void> {
@@ -198,47 +221,49 @@ export class AwsBackend implements VaultBackend {
     const userTags = tags ?? [];
     const envelope = this.encodeEnvelope(value, userTags);
 
-    // Try to update first; if not found, create.
-    try {
-      await client.send(
-        new sdk.PutSecretValueCommand({
-          SecretId: awsName,
-          SecretString: envelope,
-        }),
+    // Check existence and ownership BEFORE writing. A secret at this prefix
+    // that lacks psst:managed=true was created outside psst — refuse to
+    // overwrite it.
+    const managed = await this.isManagedSecret(awsName);
+    if (managed === false) {
+      throw new Error(
+        `AWS secret "${awsName}" exists but is not managed by psst. ` +
+          `Refusing to overwrite. Remove it manually or use a different prefix.`,
       );
-      // Keep resource tags in sync with the envelope we just wrote. This
-      // matches the sqlite backend's semantics: setSecret(name, value) with
-      // no tags argument clears tags; setSecret(name, value, tags) replaces
-      // the tag set. Use psst tag / psst untag to mutate tags without
-      // replacing the value.
-      await this.syncResourceTags(awsName, userTags);
-    } catch (err) {
-      if (isAwsErrorNamed(err, "ResourceNotFoundException")) {
-        await this.createSecretWithRetry(awsName, envelope, userTags);
-        return;
-      }
-      if (isAwsErrorNamed(err, "InvalidRequestException")) {
-        // The secret exists but is scheduled for deletion (can happen after
-        // ForceDeleteWithoutRecovery during the ~15s reuse window, or after
-        // a soft-delete with recovery). Try to restore, then retry once.
-        const restored = await this.tryRestoreSecret(awsName);
-        if (restored) {
+    }
+
+    if (managed === true) {
+      // Secret exists and is ours — update it.
+      try {
+        await client.send(
+          new sdk.PutSecretValueCommand({
+            SecretId: awsName,
+            SecretString: envelope,
+          }),
+        );
+      } catch (err) {
+        // A psst-managed secret that was soft-deleted via the AWS console
+        // (not psst rm, which force-deletes) is still describable but
+        // rejects PutSecretValue. Restore it first, then retry.
+        if (isAwsErrorNamed(err, "InvalidRequestException")) {
+          const restored = await this.tryRestoreSecret(awsName);
+          if (!restored) throw err;
           await client.send(
             new sdk.PutSecretValueCommand({
               SecretId: awsName,
               SecretString: envelope,
             }),
           );
-          await this.syncResourceTags(awsName, userTags);
-          return;
+        } else {
+          throw err;
         }
-        throw new Error(
-          `AWS secret "${awsName}" is scheduled for deletion and cannot be updated. ` +
-            `Wait ~15s after 'psst rm' before re-creating, or use 'aws secretsmanager restore-secret'.`,
-        );
       }
-      throw err;
+      await this.syncResourceTags(awsName, userTags);
+      return;
     }
+
+    // managed === null → secret doesn't exist, create it.
+    await this.createSecretWithRetry(awsName, envelope, userTags);
   }
 
   /**
@@ -282,6 +307,16 @@ export class AwsBackend implements VaultBackend {
         if (isSchedulingRace) {
           const restored = await this.tryRestoreSecret(awsName);
           if (restored) {
+            // Verify the restored secret is psst-managed. A non-psst
+            // secret that was soft-deleted would also be restored here;
+            // refuse to overwrite it.
+            const managed = await this.isManagedSecret(awsName);
+            if (managed === false) {
+              throw new Error(
+                `AWS secret "${awsName}" exists but is not managed by psst. ` +
+                  `Refusing to overwrite. Remove it manually or use a different prefix.`,
+              );
+            }
             await client.send(
               new sdk.PutSecretValueCommand({
                 SecretId: awsName,
@@ -756,6 +791,12 @@ export class AwsBackend implements VaultBackend {
   async removeSecret(name: string): Promise<boolean> {
     const { sdk, client } = await this.getClient();
     const awsName = this.toAwsName(name);
+
+    // Only delete secrets that psst manages. An unmanaged secret at this
+    // prefix was created outside psst — treat it as "not found" rather
+    // than permanently destroying someone else's data.
+    const managed = await this.isManagedSecret(awsName);
+    if (managed !== true) return false;
 
     try {
       await client.send(
