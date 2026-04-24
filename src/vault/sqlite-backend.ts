@@ -109,6 +109,13 @@ export class SqliteBackend implements VaultBackend {
     return this.key;
   }
 
+  async exists(name: string): Promise<boolean> {
+    const row = this.db
+      .query("SELECT 1 AS ok FROM secrets WHERE name = ?")
+      .get(name) as { ok: number } | null;
+    return row !== null;
+  }
+
   async setSecret(name: string, value: string, tags?: string[]): Promise<void> {
     const key = this.requireKey();
 

@@ -264,6 +264,13 @@ describe("AwsBackend", () => {
       expect(await b.removeSecret("MISSING")).toBe(false);
     });
 
+    it("exists returns true for present secret, false for missing", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      await b.setSecret("A", "v");
+      expect(await b.exists("A")).toBe(true);
+      expect(await b.exists("NOPE")).toBe(false);
+    });
+
     it("updates overwrite and preserve the secret name", async () => {
       const b = new AwsBackend({ region: "us-east-1" });
       await b.setSecret("A", "v1");
@@ -318,6 +325,32 @@ describe("AwsBackend", () => {
       await b.setSecret("A", "v", ["keep", "gone"]);
       await b.removeTags("A", ["gone"]);
       expect(await b.getTags("A")).toEqual(["keep"]);
+    });
+
+    it("setTags returns false for missing secret (no Tag/Untag calls)", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      expect(await b.setTags("NOPE", ["x"])).toBe(false);
+    });
+
+    it("addTags returns false for missing secret", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      expect(await b.addTags("NOPE", ["x"])).toBe(false);
+    });
+
+    it("removeTags returns false for missing secret", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      expect(await b.removeTags("NOPE", ["x"])).toBe(false);
+    });
+
+    it("setTags with identical tag set makes no Tag/Untag calls", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      await b.setSecret("A", "v", ["prod", "api"]);
+      const s = store.secrets.get("psst/A")!;
+      const beforeTagCount = s.Tags.length;
+      // Apply the same tag set. Shouldn't shuffle resource tags at all.
+      await b.setTags("A", ["api", "prod"]);
+      expect(s.Tags.length).toBe(beforeTagCount);
+      expect((await b.getTags("A")).sort()).toEqual(["api", "prod"]);
     });
 
     it("ignores non-psst resource tags when listing", async () => {

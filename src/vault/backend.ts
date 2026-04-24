@@ -36,6 +36,9 @@ export interface SecretHistoryRecord {
 export interface VaultBackend {
   readonly type: string;
 
+  /** Return true if a secret with this logical name exists. */
+  exists(name: string): Promise<boolean>;
+
   /** Set or update a secret. Implementations should archive previous versions. */
   setSecret(name: string, value: string, tags?: string[]): Promise<void>;
 

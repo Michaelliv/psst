@@ -124,6 +124,11 @@ export class Vault {
     return this.backend.setSecret(name, value, tags);
   }
 
+  /** True if a secret with this logical name exists in the backend. */
+  exists(name: string): Promise<boolean> {
+    return this.backend.exists(name);
+  }
+
   getSecret(name: string): Promise<string | null> {
     return this.backend.getSecret(name);
   }

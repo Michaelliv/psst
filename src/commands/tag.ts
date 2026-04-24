@@ -23,11 +23,10 @@ export async function tag(
 
   const vault = await getUnlockedVault(options);
 
-  // Check if secret exists. getSecret returns null only when the secret
-  // is truly absent — cheaper than listSecrets, especially on remote
-  // backends like AWS where listSecrets paginates the whole account.
-  const probe = await vault.getSecret(name);
-  if (probe === null) {
+  // Cheap existence check — resolves to a single DescribeSecret on AWS,
+  // one indexed SQL lookup on sqlite. Avoids fetching / decrypting the
+  // secret value we don't need.
+  if (!(await vault.exists(name))) {
     vault.close();
     if (options.json) {
       console.log(JSON.stringify({ success: false, error: "not_found", name }));
@@ -74,10 +73,9 @@ export async function untag(
 
   const vault = await getUnlockedVault(options);
 
-  // Existence check — see tag() for rationale on using getSecret instead
-  // of listSecrets.
-  const probe = await vault.getSecret(name);
-  if (probe === null) {
+  // Existence check — uses vault.exists() (single DescribeSecret on AWS,
+  // one indexed lookup on sqlite) instead of loading the secret value.
+  if (!(await vault.exists(name))) {
     vault.close();
     if (options.json) {
       console.log(JSON.stringify({ success: false, error: "not_found", name }));

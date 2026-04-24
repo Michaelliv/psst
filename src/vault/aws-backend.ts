@@ -160,6 +160,18 @@ export class AwsBackend implements VaultBackend {
     return tags;
   }
 
+  async exists(name: string): Promise<boolean> {
+    const { sdk, client } = await this.getClient();
+    const awsName = this.toAwsName(name);
+    try {
+      await client.send(new sdk.DescribeSecretCommand({ SecretId: awsName }));
+      return true;
+    } catch (err: any) {
+      if (err?.name === "ResourceNotFoundException") return false;
+      throw err;
+    }
+  }
+
   async setSecret(name: string, value: string, tags?: string[]): Promise<void> {
     const { sdk, client } = await this.getClient();
     const awsName = this.toAwsName(name);
@@ -420,66 +432,72 @@ export class AwsBackend implements VaultBackend {
     }
   }
 
-  async setTags(name: string, tags: string[]): Promise<boolean> {
-    const awsName = this.toAwsName(name);
-    // Ensure the secret exists
+  /**
+   * Reads current tags and the existence state in one DescribeSecret call,
+   * so callers don't round-trip twice. Returns null when the secret doesn't
+   * exist (caller decides how to surface that).
+   */
+  private async describeTags(
+    awsName: string,
+  ): Promise<{ current: string[] } | null> {
     const { sdk, client } = await this.getClient();
     try {
-      await client.send(new sdk.DescribeSecretCommand({ SecretId: awsName }));
+      const resp: any = await client.send(
+        new sdk.DescribeSecretCommand({ SecretId: awsName }),
+      );
+      return { current: this.extractTagsFromResourceTags(resp.Tags) };
     } catch (err: any) {
-      if (err?.name === "ResourceNotFoundException") return false;
+      if (err?.name === "ResourceNotFoundException") return null;
       throw err;
     }
+  }
 
-    // Resource tags are the authoritative source of truth for listing and
-    // filtering. We intentionally do NOT rewrite the SecretString envelope
-    // here — PutSecretValue always creates a new AWS version, which would
-    // produce spurious 'psst history' entries for pure tag changes. The
-    // payload's embedded tags therefore become stale after a tag-only
-    // change, but the only read path that returns envelope tags is
-    // getHistory (for the historical version in question), where the
-    // tags represent "tags at the time of archival" — which by definition
-    // doesn't move when a tag is applied to the current version.
-    await this.syncResourceTags(awsName, tags);
-
+  async setTags(name: string, tags: string[]): Promise<boolean> {
+    const awsName = this.toAwsName(name);
+    const desc = await this.describeTags(awsName);
+    if (!desc) return false;
+    await this.applyTagDiff(awsName, desc.current, tags);
     return true;
   }
 
   async addTags(name: string, newTags: string[]): Promise<boolean> {
-    const existing = await this.getTags(name);
-    const merged = [...new Set([...existing, ...newTags])];
-    return this.setTags(name, merged);
+    const awsName = this.toAwsName(name);
+    const desc = await this.describeTags(awsName);
+    if (!desc) return false;
+    const merged = [...new Set([...desc.current, ...newTags])];
+    await this.applyTagDiff(awsName, desc.current, merged);
+    return true;
   }
 
   async removeTags(name: string, tagsToRemove: string[]): Promise<boolean> {
-    const existing = await this.getTags(name);
-    const filtered = existing.filter((t) => !tagsToRemove.includes(t));
-    return this.setTags(name, filtered);
+    const awsName = this.toAwsName(name);
+    const desc = await this.describeTags(awsName);
+    if (!desc) return false;
+    const filtered = desc.current.filter((t) => !tagsToRemove.includes(t));
+    await this.applyTagDiff(awsName, desc.current, filtered);
+    return true;
   }
 
-  private async syncResourceTags(awsName: string, userTags: string[]): Promise<void> {
+  /**
+   * Issue Tag/UntagResource based on a precomputed diff between current and
+   * desired user-tag sets, both expressed as logical tag names. Skips the
+   * AWS calls entirely when there's nothing to change.
+   */
+  private async applyTagDiff(
+    awsName: string,
+    currentTags: string[],
+    desiredTags: string[],
+  ): Promise<void> {
     const { sdk, client } = await this.getClient();
-
-    // Read current tags to compute diff
-    const desc: any = await client.send(
-      new sdk.DescribeSecretCommand({ SecretId: awsName }),
+    const currentKeys = new Set(
+      currentTags.map((t) => `${USER_TAG_KEY_PREFIX}${t}`),
     );
-    const currentUserTagKeys = (desc.Tags ?? [])
-      .map((t: any) => t.Key as string | undefined)
-      .filter(
-        (k: string | undefined): k is string =>
-          !!k && k.startsWith(USER_TAG_KEY_PREFIX),
-      );
-    const desiredUserTagKeys = new Set(
-      userTags.map((t) => `${USER_TAG_KEY_PREFIX}${t}`),
+    const desiredKeys = new Set(
+      desiredTags.map((t) => `${USER_TAG_KEY_PREFIX}${t}`),
     );
 
-    const toRemove = currentUserTagKeys.filter(
-      (k: string) => !desiredUserTagKeys.has(k),
-    );
-    const toAdd = [...desiredUserTagKeys].filter(
-      (k) => !currentUserTagKeys.includes(k),
-    );
+    const toRemove = [...currentKeys].filter((k) => !desiredKeys.has(k));
+    const toAdd = [...desiredKeys].filter((k) => !currentKeys.has(k));
 
     if (toRemove.length > 0) {
       await client.send(
@@ -497,6 +515,20 @@ export class AwsBackend implements VaultBackend {
         }),
       );
     }
+  }
+
+  /**
+   * Used by setSecret after PutSecretValue to keep resource tags aligned
+   * with the tags baked into the envelope we just wrote. Does one
+   * DescribeSecret to read the current tag set, then diffs.
+   */
+  private async syncResourceTags(awsName: string, userTags: string[]): Promise<void> {
+    const { sdk, client } = await this.getClient();
+    const desc: any = await client.send(
+      new sdk.DescribeSecretCommand({ SecretId: awsName }),
+    );
+    const currentTags = this.extractTagsFromResourceTags(desc.Tags);
+    await this.applyTagDiff(awsName, currentTags, userTags);
   }
 
   async getHistory(name: string): Promise<SecretHistoryRecord[]> {

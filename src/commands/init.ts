@@ -68,6 +68,10 @@ export async function init(
       console.error(chalk.red("✗"), err.message);
     }
     process.exit(EXIT_USER_ERROR);
+    // Unreachable: process.exit's return type is `never`, but TS control
+    // flow analysis doesn't always propagate that through the try/catch.
+    // Explicit return keeps `backend` definitely-assigned below.
+    return;
   }
 
   let awsConfig: AwsBackendConfig | undefined;
