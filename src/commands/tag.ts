@@ -24,10 +24,10 @@ export async function tag(
   const vault = await getUnlockedVault(options);
 
   // Check if secret exists
-  const existing = vault.getTags(name);
+  const existing = await vault.getTags(name);
   if (existing.length === 0) {
     // Could be no tags or secret doesn't exist - check by listing
-    const secrets = vault.listSecrets();
+    const secrets = await vault.listSecrets();
     const exists = secrets.some((s) => s.name === name);
     if (!exists) {
       vault.close();
@@ -42,8 +42,8 @@ export async function tag(
     }
   }
 
-  const success = vault.addTags(name, tagsToAdd);
-  const newTags = vault.getTags(name);
+  const success = await vault.addTags(name, tagsToAdd);
+  const newTags = await vault.getTags(name);
   vault.close();
 
   if (options.json) {
@@ -80,7 +80,7 @@ export async function untag(
   const vault = await getUnlockedVault(options);
 
   // Check if secret exists
-  const secrets = vault.listSecrets();
+  const secrets = await vault.listSecrets();
   const exists = secrets.some((s) => s.name === name);
   if (!exists) {
     vault.close();
@@ -92,8 +92,8 @@ export async function untag(
     process.exit(EXIT_USER_ERROR);
   }
 
-  const success = vault.removeTags(name, tagsToRemove);
-  const newTags = vault.getTags(name);
+  const success = await vault.removeTags(name, tagsToRemove);
+  const newTags = await vault.getTags(name);
   vault.close();
 
   if (options.json) {

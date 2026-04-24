@@ -49,7 +49,7 @@ export async function run(
   }
 
   // Get secrets (optionally filtered by tags)
-  const secretMetas = vault.listSecrets(options.tags);
+  const secretMetas = await vault.listSecrets(options.tags);
   const secrets = new Map<string, string>();
 
   for (const meta of secretMetas) {

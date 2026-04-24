@@ -4,7 +4,7 @@ import { getUnlockedVault } from "./common.js";
 
 export async function list(options: OutputOptions = {}): Promise<void> {
   const vault = await getUnlockedVault(options);
-  const secrets = vault.listSecrets(options.tags);
+  const secrets = await vault.listSecrets(options.tags);
   vault.close();
 
   // JSON output

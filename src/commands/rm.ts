@@ -8,9 +8,9 @@ export async function rm(
   options: OutputOptions = {},
 ): Promise<void> {
   const vault = await getUnlockedVault(options);
-  const removed = vault.removeSecret(name);
+  const removed = await vault.removeSecret(name);
   if (removed) {
-    vault.clearHistory(name);
+    await vault.clearHistory(name);
   }
   vault.close();
 

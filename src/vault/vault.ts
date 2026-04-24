@@ -1,455 +1,260 @@
-import { type SqliteDatabase, openDatabase } from "./database.js";
+/**
+ * vault.ts — Vault façade over pluggable storage backends.
+ *
+ * The Vault class keeps its historical public API (setSecret, getSecret,
+ * listSecrets, etc) and delegates to the configured backend:
+ *
+ *   sqlite — local encrypted SQLite (default; original behavior)
+ *   aws    — AWS Secrets Manager (new)
+ *
+ * Selection order:
+ *
+ *   1. Explicit `options.backend` passed to the constructor.
+ *   2. `config.json` inside the vault directory.
+ *   3. Default: sqlite.
+ *
+ * Environment/CLI-level config is handled by callers (they pass
+ * the resolved config into the constructor) so the Vault stays pure.
+ */
+
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { decrypt, encrypt, keyToBuffer } from "./crypto.js";
-import { generateKey, getKey, isKeychainAvailable, storeKey } from "./keychain.js";
+import type {
+  SecretHistoryRecord,
+  SecretMetaRecord,
+  VaultBackend,
+} from "./backend.js";
+import {
+  type AwsBackendConfig,
+  type BackendType,
+  type VaultConfig,
+  loadConfig,
+  saveConfig,
+} from "./config.js";
+import { AwsBackend, initializeAwsVault } from "./aws-backend.js";
+import { SqliteBackend, initializeSqliteVault } from "./sqlite-backend.js";
 
 const VAULT_DIR_NAME = ".psst";
 const DB_NAME = "vault.db";
+const CONFIG_FILE_NAME = "config.json";
 
-export interface Secret {
-  name: string;
-  value: string;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SecretMeta {
-  name: string;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SecretHistoryEntry {
-  version: number;
-  tags: string[];
-  archived_at: string;
-}
+// Re-export the backend record types under their historic names so
+// existing callers (the CLI commands, SDK consumers) don't need to change.
+export type Secret = SecretHistoryRecord extends never
+  ? never
+  : {
+      name: string;
+      value: string;
+      tags: string[];
+      created_at: string;
+      updated_at: string;
+    };
+export type SecretMeta = SecretMetaRecord;
+export type SecretHistoryEntry = SecretHistoryRecord;
 
 export interface VaultOptions {
-  /** Encryption key (base64 or password string). Skips keychain/env var lookup. */
+  /** Encryption key (base64 or password string). Only meaningful for the sqlite backend. */
   key?: string;
+  /** Override the backend selection. Skips reading config.json. */
+  backend?: BackendType;
+  /** AWS backend settings. Only used when backend === "aws". */
+  aws?: AwsBackendConfig;
 }
 
 export class Vault {
-  private db: SqliteDatabase;
-  private key: Buffer | null = null;
   readonly vaultPath: string;
+  private backend: VaultBackend;
+  // Kept for backwards-compatible isUnlocked() — only meaningful for sqlite.
+  private sqlite: SqliteBackend | null = null;
 
   constructor(vaultPath: string, options?: VaultOptions) {
     this.vaultPath = vaultPath;
-    const dbPath = join(vaultPath, DB_NAME);
-    this.db = openDatabase(dbPath);
-    this.initSchema();
 
-    if (options?.key) {
-      this.key = keyToBuffer(options.key);
+    // Resolve the backend choice and config.
+    let backendType: BackendType;
+    let awsConfig: AwsBackendConfig | undefined;
+
+    if (options?.backend) {
+      backendType = options.backend;
+      awsConfig = options.aws;
+    } else {
+      const fileConfig = this.tryLoadConfig();
+      backendType = fileConfig?.backend ?? "sqlite";
+      awsConfig = fileConfig?.aws ?? options?.aws;
+    }
+
+    if (backendType === "aws") {
+      this.backend = new AwsBackend(awsConfig);
+    } else {
+      const sqlite = new SqliteBackend(vaultPath, { key: options?.key });
+      this.sqlite = sqlite;
+      this.backend = sqlite;
     }
   }
 
-  private initSchema() {
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS secrets (
-        name TEXT PRIMARY KEY,
-        encrypted_value BLOB NOT NULL,
-        iv BLOB NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  private tryLoadConfig(): VaultConfig | null {
+    const configPath = join(this.vaultPath, CONFIG_FILE_NAME);
+    if (!existsSync(configPath)) return null;
+    return loadConfig(this.vaultPath);
+  }
 
-    // Migration: add tags column if it doesn't exist
-    const columns = this.db.query("PRAGMA table_info(secrets)").all() as {
-      name: string;
-    }[];
-    const hasTagsColumn = columns.some((col) => col.name === "tags");
-    if (!hasTagsColumn) {
-      this.db.run("ALTER TABLE secrets ADD COLUMN tags TEXT DEFAULT '[]'");
-    }
-
-    // Migration: add secrets_history table
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS secrets_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        version INTEGER NOT NULL,
-        encrypted_value BLOB NOT NULL,
-        iv BLOB NOT NULL,
-        tags TEXT DEFAULT '[]',
-        archived_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(name, version)
-      )
-    `);
-    this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_secrets_history_name ON secrets_history(name)
-    `);
+  /** Backend type currently in use — useful for CLI messaging. */
+  get backendType(): string {
+    return this.backend.type;
   }
 
   /**
-   * Unlock vault using keychain or fallback password.
-   * Not needed if key was provided in constructor options.
+   * Unlock the vault. For sqlite: fetches the encryption key from keychain
+   * or PSST_PASSWORD. For aws: no-op (auth is handled by AWS SDK).
    */
   async unlock(): Promise<boolean> {
-    if (this.key) return true;
-
-    // Try keychain first
-    const keychainResult = await getKey();
-
-    if (keychainResult.success && keychainResult.key) {
-      this.key = keyToBuffer(keychainResult.key);
-      return true;
-    }
-
-    // Fallback to PSST_PASSWORD env var
-    if (process.env.PSST_PASSWORD) {
-      this.key = keyToBuffer(process.env.PSST_PASSWORD);
-      return true;
-    }
-
-    return false;
-  }
-
-  isUnlocked(): boolean {
-    return this.key !== null;
-  }
-
-  async setSecret(name: string, value: string, tags?: string[]): Promise<void> {
-    if (!this.key) throw new Error("Vault is locked");
-
-    // Archive existing secret to history before overwriting
-    const existing = this.db
-      .query("SELECT encrypted_value, iv, tags FROM secrets WHERE name = ?")
-      .get(name) as {
-      encrypted_value: Buffer;
-      iv: Buffer;
-      tags: string;
-    } | null;
-
-    if (existing) {
-      const maxVersion = this.db
-        .query(
-          "SELECT MAX(version) as max_v FROM secrets_history WHERE name = ?",
-        )
-        .get(name) as { max_v: number | null } | null;
-      const nextVersion = (maxVersion?.max_v ?? 0) + 1;
-
-      this.db.run(
-        `INSERT INTO secrets_history (name, version, encrypted_value, iv, tags)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          name,
-          nextVersion,
-          existing.encrypted_value,
-          existing.iv,
-          existing.tags || "[]",
-        ],
-      );
-
-      this.pruneHistory(name);
-    }
-
-    const { encrypted, iv } = await encrypt(value, this.key);
-    const tagsJson = JSON.stringify(tags || []);
-
-    this.db.run(
-      `INSERT INTO secrets (name, encrypted_value, iv, tags, updated_at)
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(name) DO UPDATE SET
-         encrypted_value = excluded.encrypted_value,
-         iv = excluded.iv,
-         tags = excluded.tags,
-         updated_at = CURRENT_TIMESTAMP`,
-      [name, encrypted, iv, tagsJson],
-    );
-  }
-
-  async getSecret(name: string): Promise<string | null> {
-    if (!this.key) throw new Error("Vault is locked");
-
-    const row = this.db
-      .query("SELECT encrypted_value, iv FROM secrets WHERE name = ?")
-      .get(name) as { encrypted_value: Buffer; iv: Buffer } | null;
-
-    if (!row) return null;
-
-    return decrypt(row.encrypted_value, row.iv, this.key);
-  }
-
-  async getSecrets(names: string[]): Promise<Map<string, string>> {
-    const result = new Map<string, string>();
-
-    for (const name of names) {
-      const value = await this.getSecret(name);
-      if (value !== null) {
-        result.set(name, value);
-      }
-    }
-
-    return result;
-  }
-
-  listSecrets(filterTags?: string[]): SecretMeta[] {
-    const rows = this.db
-      .query(
-        "SELECT name, tags, created_at, updated_at FROM secrets ORDER BY name",
-      )
-      .all() as {
-      name: string;
-      tags: string;
-      created_at: string;
-      updated_at: string;
-    }[];
-
-    const secrets = rows.map((row) => ({
-      name: row.name,
-      tags: JSON.parse(row.tags || "[]") as string[],
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-    }));
-
-    // Filter by tags if specified (OR logic - any matching tag)
-    if (filterTags && filterTags.length > 0) {
-      return secrets.filter((s) => s.tags.some((t) => filterTags.includes(t)));
-    }
-
-    return secrets;
-  }
-
-  getTags(name: string): string[] {
-    const row = this.db
-      .query("SELECT tags FROM secrets WHERE name = ?")
-      .get(name) as { tags: string } | null;
-
-    if (!row) return [];
-    return JSON.parse(row.tags || "[]");
-  }
-
-  setTags(name: string, tags: string[]): boolean {
-    const result = this.db.run(
-      "UPDATE secrets SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
-      [JSON.stringify(tags), name],
-    );
-    return result.changes > 0;
-  }
-
-  addTags(name: string, newTags: string[]): boolean {
-    const existing = this.getTags(name);
-    const merged = [...new Set([...existing, ...newTags])];
-    return this.setTags(name, merged);
-  }
-
-  removeTags(name: string, tagsToRemove: string[]): boolean {
-    const existing = this.getTags(name);
-    const filtered = existing.filter((t) => !tagsToRemove.includes(t));
-    return this.setTags(name, filtered);
-  }
-
-  getHistory(name: string): SecretHistoryEntry[] {
-    const rows = this.db
-      .query(
-        "SELECT version, tags, archived_at FROM secrets_history WHERE name = ? ORDER BY version DESC",
-      )
-      .all(name) as { version: number; tags: string; archived_at: string }[];
-
-    return rows.map((row) => ({
-      version: row.version,
-      tags: JSON.parse(row.tags || "[]") as string[],
-      archived_at: row.archived_at,
-    }));
-  }
-
-  async getHistoryVersion(
-    name: string,
-    version: number,
-  ): Promise<string | null> {
-    if (!this.key) throw new Error("Vault is locked");
-
-    const row = this.db
-      .query(
-        "SELECT encrypted_value, iv FROM secrets_history WHERE name = ? AND version = ?",
-      )
-      .get(name, version) as { encrypted_value: Buffer; iv: Buffer } | null;
-
-    if (!row) return null;
-
-    return decrypt(row.encrypted_value, row.iv, this.key);
-  }
-
-  async rollback(name: string, targetVersion: number): Promise<boolean> {
-    if (!this.key) throw new Error("Vault is locked");
-
-    // Check that the target version exists in history
-    const historyRow = this.db
-      .query(
-        "SELECT encrypted_value, iv, tags FROM secrets_history WHERE name = ? AND version = ?",
-      )
-      .get(name, targetVersion) as {
-      encrypted_value: Buffer;
-      iv: Buffer;
-      tags: string;
-    } | null;
-
-    if (!historyRow) return false;
-
-    // Check that the secret currently exists
-    const currentRow = this.db
-      .query("SELECT encrypted_value, iv, tags FROM secrets WHERE name = ?")
-      .get(name) as {
-      encrypted_value: Buffer;
-      iv: Buffer;
-      tags: string;
-    } | null;
-
-    if (!currentRow) return false;
-
-    // Archive current value first (making rollback reversible)
-    const maxVersion = this.db
-      .query("SELECT MAX(version) as max_v FROM secrets_history WHERE name = ?")
-      .get(name) as { max_v: number | null } | null;
-    const nextVersion = (maxVersion?.max_v ?? 0) + 1;
-
-    this.db.run(
-      `INSERT INTO secrets_history (name, version, encrypted_value, iv, tags)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        name,
-        nextVersion,
-        currentRow.encrypted_value,
-        currentRow.iv,
-        currentRow.tags || "[]",
-      ],
-    );
-
-    // Restore the target version to the main table
-    this.db.run(
-      `UPDATE secrets SET encrypted_value = ?, iv = ?, tags = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?`,
-      [
-        historyRow.encrypted_value,
-        historyRow.iv,
-        historyRow.tags || "[]",
-        name,
-      ],
-    );
-
-    this.pruneHistory(name);
-
+    if (this.sqlite) return this.sqlite.unlock();
     return true;
   }
 
-  clearHistory(name: string): void {
-    this.db.run("DELETE FROM secrets_history WHERE name = ?", [name]);
+  /** True if the backend is ready to read/write. */
+  isUnlocked(): boolean {
+    if (this.sqlite) return this.sqlite.isUnlocked();
+    return true;
   }
 
-  private pruneHistory(name: string, keep: number = 10): void {
-    this.db.run(
-      `DELETE FROM secrets_history WHERE name = ? AND id NOT IN (
-        SELECT id FROM secrets_history WHERE name = ? ORDER BY version DESC LIMIT ?
-      )`,
-      [name, name, keep],
-    );
+  setSecret(name: string, value: string, tags?: string[]): Promise<void> {
+    return this.backend.setSecret(name, value, tags);
   }
 
-  removeSecret(name: string): boolean {
-    const result = this.db.run("DELETE FROM secrets WHERE name = ?", [name]);
-    return result.changes > 0;
+  getSecret(name: string): Promise<string | null> {
+    return this.backend.getSecret(name);
   }
 
-  close() {
-    this.db.close();
+  getSecrets(names: string[]): Promise<Map<string, string>> {
+    return this.backend.getSecrets(names);
+  }
+
+  // Historically synchronous — callers expect a sync signature.
+  // The sqlite backend is truly sync internally; for the aws backend we
+  // surface an async variant, but to stay API-compatible we deopt to a
+  // sync façade that returns a Promise-like only when needed.
+  //
+  // Simpler option: make listSecrets async in both. The CLI already awaits.
+  listSecrets(filterTags?: string[]): Promise<SecretMetaRecord[]> {
+    return this.backend.listSecrets(filterTags);
+  }
+
+  getTags(name: string): Promise<string[]> {
+    return this.backend.getTags(name);
+  }
+
+  setTags(name: string, tags: string[]): Promise<boolean> {
+    return this.backend.setTags(name, tags);
+  }
+
+  addTags(name: string, newTags: string[]): Promise<boolean> {
+    return this.backend.addTags(name, newTags);
+  }
+
+  removeTags(name: string, tagsToRemove: string[]): Promise<boolean> {
+    return this.backend.removeTags(name, tagsToRemove);
+  }
+
+  getHistory(name: string): Promise<SecretHistoryRecord[]> {
+    return this.backend.getHistory(name);
+  }
+
+  getHistoryVersion(name: string, version: number): Promise<string | null> {
+    return this.backend.getHistoryVersion(name, version);
+  }
+
+  rollback(name: string, targetVersion: number): Promise<boolean> {
+    return this.backend.rollback(name, targetVersion);
+  }
+
+  clearHistory(name: string): Promise<void> {
+    return this.backend.clearHistory(name);
+  }
+
+  removeSecret(name: string): Promise<boolean> {
+    return this.backend.removeSecret(name);
+  }
+
+  close(): void {
+    this.backend.close();
   }
 
   /**
-   * Initialize a new vault directory and database.
+   * Initialize a new vault directory and storage backend.
    *
-   * When called without options, generates a key and stores it in the OS keychain
-   * (CLI mode). When using the SDK with a custom key, pass `{ skipKeychain: true }`
-   * to just create the directory and database — you'll provide the key via the
-   * constructor instead.
+   * CLI usage: no options for sqlite (keychain path) — or
+   *   { backend: "aws", aws: {...} } for the AWS backend.
+   *
+   * SDK usage with a custom key: pass `{ skipKeychain: true }`.
    */
   static async initializeVault(
     vaultPath: string,
-    options?: { skipKeychain?: boolean },
+    options?: {
+      skipKeychain?: boolean;
+      backend?: BackendType;
+      aws?: AwsBackendConfig;
+    },
   ): Promise<{ success: boolean; error?: string }> {
-    // Create vault directory
     if (!existsSync(vaultPath)) {
       mkdirSync(vaultPath, { recursive: true });
     }
 
-    // SDK mode: just create the directory and database
-    if (options?.skipKeychain) {
-      const vault = new Vault(vaultPath);
-      vault.close();
+    const backend: BackendType = options?.backend ?? "sqlite";
+
+    if (backend === "aws") {
+      const check = initializeAwsVault(options?.aws);
+      if (!check.success) return check;
+
+      saveConfig(vaultPath, { backend: "aws", aws: options?.aws ?? {} });
       return { success: true };
     }
 
-    // CLI mode: set up keychain key
-    const hasKeychain = await isKeychainAvailable();
-
-    if (!hasKeychain && !process.env.PSST_PASSWORD) {
-      return {
-        success: false,
-        error: "No keychain available. Set PSST_PASSWORD env var as fallback.",
-      };
-    }
-
-    // Reuse existing key if one exists, otherwise generate a new one
-    const existingKey = await getKey();
-
-    if (!existingKey.success || !existingKey.key) {
-      const key = generateKey();
-      const storeResult = await storeKey(key);
-
-      if (!storeResult.success) {
-        if (!process.env.PSST_PASSWORD) {
-          return {
-            success: false,
-            error: `Keychain error: ${storeResult.error}. Set PSST_PASSWORD as fallback.`,
-          };
-        }
-        console.log("Note: Using PSST_PASSWORD (keychain not available)");
+    // sqlite
+    const result = await initializeSqliteVault(vaultPath, {
+      skipKeychain: options?.skipKeychain,
+    });
+    if (result.success) {
+      // Only write a config file if it doesn't already exist — keeps
+      // the default sqlite case as zero-config.
+      const configPath = join(vaultPath, CONFIG_FILE_NAME);
+      if (!existsSync(configPath)) {
+        // Intentionally skipped: default config is the absence of a file.
       }
     }
-
-    // Initialize database
-    const vault = new Vault(vaultPath);
-    vault.close();
-
-    return { success: true };
+    return result;
   }
 
+  /**
+   * Discover a vault path on disk.
+   *
+   * A vault is considered present if either a `vault.db` (sqlite) or a
+   * `config.json` (any backend, e.g. aws with no local db) exists.
+   */
   static findVaultPath(
     options: { global?: boolean; env?: string } = {},
   ): string | null {
     const { global = false, env } = options;
 
-    // Determine base path based on scope (no fallback between local and global)
     const basePath = global
       ? join(homedir(), VAULT_DIR_NAME)
       : join(process.cwd(), VAULT_DIR_NAME);
 
-    // If env specified, look for env-specific vault only
+    const hasVault = (dir: string) =>
+      existsSync(join(dir, DB_NAME)) || existsSync(join(dir, CONFIG_FILE_NAME));
+
     if (env) {
       const envPath = join(basePath, "envs", env);
-      if (existsSync(join(envPath, DB_NAME))) {
-        return envPath;
-      }
-      return null;
+      return hasVault(envPath) ? envPath : null;
     }
 
-    // No env specified: check legacy path first, then default env
-    // Legacy: .psst/vault.db (no envs folder)
-    if (existsSync(join(basePath, DB_NAME))) {
-      return basePath;
-    }
+    // Legacy: .psst/vault.db or .psst/config.json (no envs folder)
+    if (hasVault(basePath)) return basePath;
 
-    // Default env: .psst/envs/default/vault.db
+    // Default env
     const defaultEnvPath = join(basePath, "envs", "default");
-    if (existsSync(join(defaultEnvPath, DB_NAME))) {
-      return defaultEnvPath;
-    }
+    if (hasVault(defaultEnvPath)) return defaultEnvPath;
 
     return null;
   }
@@ -459,10 +264,7 @@ export class Vault {
       ? join(homedir(), VAULT_DIR_NAME)
       : join(process.cwd(), VAULT_DIR_NAME);
 
-    if (env) {
-      return join(basePath, "envs", env);
-    }
-
+    if (env) return join(basePath, "envs", env);
     return basePath;
   }
 
@@ -473,20 +275,23 @@ export class Vault {
 
     const envs: string[] = [];
 
-    // Check for legacy vault (counts as "default")
-    if (existsSync(join(basePath, DB_NAME))) {
+    if (
+      existsSync(join(basePath, DB_NAME)) ||
+      existsSync(join(basePath, CONFIG_FILE_NAME))
+    ) {
       envs.push("default (legacy)");
     }
 
-    // Check for envs folder
     const envsPath = join(basePath, "envs");
     if (existsSync(envsPath)) {
       try {
         const entries = readdirSync(envsPath, { withFileTypes: true });
         for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const dir = join(envsPath, entry.name);
           if (
-            entry.isDirectory() &&
-            existsSync(join(envsPath, entry.name, DB_NAME))
+            existsSync(join(dir, DB_NAME)) ||
+            existsSync(join(dir, CONFIG_FILE_NAME))
           ) {
             envs.push(entry.name);
           }

@@ -10,7 +10,7 @@ export async function history(
   const vault = await getUnlockedVault(options);
 
   // Check secret exists
-  const secrets = vault.listSecrets();
+  const secrets = await vault.listSecrets();
   const exists = secrets.some((s) => s.name === name);
 
   if (!exists) {
@@ -23,7 +23,7 @@ export async function history(
     process.exit(EXIT_USER_ERROR);
   }
 
-  const entries = vault.getHistory(name);
+  const entries = await vault.getHistory(name);
   vault.close();
 
   if (options.json) {
@@ -50,7 +50,10 @@ export async function history(
   console.log(chalk.green("●"), "current", chalk.dim("(active)"));
 
   for (const entry of entries) {
-    const date = new Date(`${entry.archived_at}Z`);
+    // archived_at may already be ISO-8601 (aws backend) or SQLite format
+    // (sqlite backend, which stores `YYYY-MM-DD HH:MM:SS` in UTC).
+    const raw = entry.archived_at;
+    const date = new Date(/[TZ]/.test(raw) ? raw : `${raw}Z`);
     const formatted =
       date.toLocaleDateString("en-US", {
         year: "numeric",

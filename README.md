@@ -48,6 +48,66 @@ The secret never touches the agent's context. It's injected into the subprocess 
 
 ---
 
+## Storage backends
+
+psst supports pluggable storage backends. Pick the one that fits your environment:
+
+| Backend  | Storage                    | Best for                               |
+|----------|----------------------------|----------------------------------------|
+| `sqlite` | Local encrypted SQLite DB  | Laptops, dev machines (default)        |
+| `aws`    | AWS Secrets Manager        | EC2 / headless / shared team secrets   |
+
+### Default: SQLite (local, encrypted)
+
+```bash
+psst init                    # creates .psst/ with SQLite + OS keychain key
+```
+
+This is what you get out of the box: a local SQLite DB encrypted with AES-256-GCM, with the key stored in your OS keychain (or `PSST_PASSWORD` as a fallback in headless environments).
+
+### AWS Secrets Manager
+
+When you're running on EC2 with an IAM role, or you want secrets shared across machines, use the AWS backend:
+
+```bash
+psst init --backend aws \
+  --aws-region us-east-1 \
+  --aws-prefix psst/            # optional, default "psst/"
+  # --aws-profile my-profile    # optional, uses default AWS cred chain otherwise
+```
+
+This writes a `config.json` into the vault directory:
+
+```json
+{
+  "backend": "aws",
+  "aws": {
+    "region": "us-east-1",
+    "prefix": "psst/"
+  }
+}
+```
+
+From then on, every `psst set`, `psst get`, `psst list`, `psst run`, `psst SECRET -- cmd`, etc. transparently uses AWS Secrets Manager instead of SQLite. **Same commands, different storage.**
+
+**What you get with the AWS backend:**
+- 🔐 Encryption at rest via AWS KMS (no local key management)
+- 📜 Native version history (via AWS versioning) — `psst history` and `psst rollback` both work
+- 🏷️  Tags synced to AWS resource tags (`psst:tag:<name>`) — filter server-side or client-side
+- 👥 Shared access via IAM — team members with the right role see the same vault
+- 🤖 Zero-config auth on EC2 (instance profile) or via `AWS_PROFILE`
+
+**Configuration resolution:**
+- `aws.region` → `AWS_REGION` → `AWS_DEFAULT_REGION` (first non-empty wins)
+- `aws.prefix` → defaults to `psst/`
+- `aws.profile` → default credential provider chain if unset
+
+**Multi-tenant safety:** psst tags every secret it creates with `psst:managed=true` and filters listings by that tag + your configured prefix, so it won't touch or list secrets in your AWS account that weren't created by psst.
+
+**Failure mode:** if AWS is unreachable, psst fails fast — it does not fall back to a local cache. No stale secrets.
+
+---
+
 ## For Humans
 
 You set up psst once. Then your agent handles the rest.

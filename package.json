@@ -65,5 +65,9 @@
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "chalk": "^5.6.2"
+  },
+  "optionalDependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/credential-providers": "^3.600.0"
   }
 }

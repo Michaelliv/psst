@@ -20,10 +20,12 @@ const HELP = `
 psst - AI-native secrets manager
 
 VAULT MANAGEMENT
-  psst init                     Create local vault (.psst/)
-  psst init --global            Create global vault (~/.psst/)
-  psst init --env <name>        Create vault for specific environment
-  psst list envs                List available environments
+  psst init                                  Create local vault (.psst/)
+  psst init --global                         Create global vault (~/.psst/)
+  psst init --env <name>                     Create vault for specific environment
+  psst init --backend aws                    Create vault backed by AWS Secrets Manager
+  psst init --backend aws --aws-region us-east-1 --aws-prefix psst/
+  psst list envs                             List available environments
 
 SECRET MANAGEMENT
   psst set <NAME> [VALUE]       Set secret (prompt if no value)

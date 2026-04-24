@@ -31,7 +31,7 @@ export async function scan(
 
   // Get vault and secrets
   const vault = await getUnlockedVault(options);
-  const secretMetas = vault.listSecrets();
+  const secretMetas = await vault.listSecrets();
 
   if (secretMetas.length === 0) {
     vault.close();

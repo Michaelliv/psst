@@ -38,13 +38,13 @@ describe("Vault unit tests", () => {
       expect(existsSync(join(vaultPath, "vault.db"))).toBe(true);
     });
 
-    it("creates secrets table", () => {
+    it("creates secrets table", async () => {
       const vault = new Vault(vaultPath);
       vault.close();
 
       // Reopen and verify table exists by listing secrets
       const vault2 = new Vault(vaultPath);
-      const secrets = vault2.listSecrets();
+      const secrets = await vault2.listSecrets();
       vault2.close();
 
       expect(secrets).toEqual([]);
@@ -235,9 +235,9 @@ describe("Vault unit tests", () => {
   });
 
   describe("listSecrets", () => {
-    it("returns empty array for new vault", () => {
+    it("returns empty array for new vault", async () => {
       const vault = new Vault(vaultPath);
-      const secrets = vault.listSecrets();
+      const secrets = await vault.listSecrets();
       vault.close();
 
       expect(secrets).toEqual([]);
@@ -250,7 +250,7 @@ describe("Vault unit tests", () => {
       await vault.setSecret("ALPHA", "a");
       await vault.setSecret("BETA", "b");
 
-      const secrets = vault.listSecrets();
+      const secrets = await vault.listSecrets();
       vault.close();
 
       expect(secrets.length).toBe(2);
@@ -268,7 +268,7 @@ describe("Vault unit tests", () => {
       await vault.setSecret("APPLE", "a");
       await vault.setSecret("MANGO", "m");
 
-      const secrets = vault.listSecrets();
+      const secrets = await vault.listSecrets();
       vault.close();
 
       expect(secrets.map((s) => s.name)).toEqual(["APPLE", "MANGO", "ZEBRA"]);
@@ -281,7 +281,7 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("TO_DELETE", "value");
-      const removed = vault.removeSecret("TO_DELETE");
+      const removed = await vault.removeSecret("TO_DELETE");
       const value = await vault.getSecret("TO_DELETE");
 
       vault.close();
@@ -290,9 +290,9 @@ describe("Vault unit tests", () => {
       expect(value).toBeNull();
     });
 
-    it("returns false for non-existent secret", () => {
+    it("returns false for non-existent secret", async () => {
       const vault = new Vault(vaultPath);
-      const removed = vault.removeSecret("NONEXISTENT");
+      const removed = await vault.removeSecret("NONEXISTENT");
       vault.close();
 
       expect(removed).toBe(false);
@@ -427,7 +427,7 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("API_KEY", "value", ["aws", "prod"]);
-      const tags = vault.getTags("API_KEY");
+      const tags = await vault.getTags("API_KEY");
 
       vault.close();
 
@@ -439,16 +439,16 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("API_KEY", "value");
-      const tags = vault.getTags("API_KEY");
+      const tags = await vault.getTags("API_KEY");
 
       vault.close();
 
       expect(tags).toEqual([]);
     });
 
-    it("getTags returns empty array for non-existent secret", () => {
+    it("getTags returns empty array for non-existent secret", async () => {
       const vault = new Vault(vaultPath);
-      const tags = vault.getTags("NONEXISTENT");
+      const tags = await vault.getTags("NONEXISTENT");
       vault.close();
 
       expect(tags).toEqual([]);
@@ -459,17 +459,17 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value", ["old"]);
-      vault.setTags("KEY", ["new1", "new2"]);
-      const tags = vault.getTags("KEY");
+      await vault.setTags("KEY", ["new1", "new2"]);
+      const tags = await vault.getTags("KEY");
 
       vault.close();
 
       expect(tags).toEqual(["new1", "new2"]);
     });
 
-    it("setTags returns false for non-existent secret", () => {
+    it("setTags returns false for non-existent secret", async () => {
       const vault = new Vault(vaultPath);
-      const result = vault.setTags("NONEXISTENT", ["tag"]);
+      const result = await vault.setTags("NONEXISTENT", ["tag"]);
       vault.close();
 
       expect(result).toBe(false);
@@ -480,8 +480,8 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value", ["existing"]);
-      vault.addTags("KEY", ["new"]);
-      const tags = vault.getTags("KEY");
+      await vault.addTags("KEY", ["new"]);
+      const tags = await vault.getTags("KEY");
 
       vault.close();
 
@@ -494,8 +494,8 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value", ["tag1"]);
-      vault.addTags("KEY", ["tag1", "tag2"]);
-      const tags = vault.getTags("KEY");
+      await vault.addTags("KEY", ["tag1", "tag2"]);
+      const tags = await vault.getTags("KEY");
 
       vault.close();
 
@@ -507,8 +507,8 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value", ["keep", "remove"]);
-      vault.removeTags("KEY", ["remove"]);
-      const tags = vault.getTags("KEY");
+      await vault.removeTags("KEY", ["remove"]);
+      const tags = await vault.getTags("KEY");
 
       vault.close();
 
@@ -520,8 +520,8 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value", ["existing"]);
-      vault.removeTags("KEY", ["nonexistent"]);
-      const tags = vault.getTags("KEY");
+      await vault.removeTags("KEY", ["nonexistent"]);
+      const tags = await vault.getTags("KEY");
 
       vault.close();
 
@@ -533,7 +533,7 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value", ["tag1", "tag2"]);
-      const secrets = vault.listSecrets();
+      const secrets = await vault.listSecrets();
 
       vault.close();
 
@@ -548,9 +548,9 @@ describe("Vault unit tests", () => {
       await vault.setSecret("STRIPE_KEY", "stripe", ["payments"]);
       await vault.setSecret("DB_KEY", "db", ["prod"]);
 
-      const awsSecrets = vault.listSecrets(["aws"]);
-      const prodSecrets = vault.listSecrets(["prod"]);
-      const paymentSecrets = vault.listSecrets(["payments"]);
+      const awsSecrets = await vault.listSecrets(["aws"]);
+      const prodSecrets = await vault.listSecrets(["prod"]);
+      const paymentSecrets = await vault.listSecrets(["payments"]);
 
       vault.close();
 
@@ -567,7 +567,7 @@ describe("Vault unit tests", () => {
       await vault.setSecret("STRIPE_KEY", "stripe", ["payments"]);
       await vault.setSecret("OTHER_KEY", "other", ["other"]);
 
-      const secrets = vault.listSecrets(["aws", "payments"]);
+      const secrets = await vault.listSecrets(["aws", "payments"]);
 
       vault.close();
 
@@ -581,7 +581,7 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value", ["tag"]);
-      const secrets = vault.listSecrets(["nonexistent"]);
+      const secrets = await vault.listSecrets(["nonexistent"]);
 
       vault.close();
 
@@ -595,7 +595,7 @@ describe("Vault unit tests", () => {
       vault1.close();
 
       const vault2 = new Vault(vaultPath);
-      const tags = vault2.getTags("KEY");
+      const tags = await vault2.getTags("KEY");
       vault2.close();
 
       expect(tags).toEqual(["persistent"]);
@@ -608,7 +608,7 @@ describe("Vault unit tests", () => {
       await vault.unlock();
 
       await vault.setSecret("KEY", "value1");
-      const history = vault.getHistory("KEY");
+      const history = await vault.getHistory("KEY");
 
       vault.close();
 
@@ -621,7 +621,7 @@ describe("Vault unit tests", () => {
 
       await vault.setSecret("KEY", "v1");
       await vault.setSecret("KEY", "v2");
-      const history = vault.getHistory("KEY");
+      const history = await vault.getHistory("KEY");
 
       vault.close();
 
@@ -652,7 +652,7 @@ describe("Vault unit tests", () => {
       await vault.setSecret("KEY", "v3");
       await vault.setSecret("KEY", "v4");
 
-      const history = vault.getHistory("KEY");
+      const history = await vault.getHistory("KEY");
 
       vault.close();
 
@@ -696,7 +696,7 @@ describe("Vault unit tests", () => {
       expect(current).toBe("v1");
 
       // Current v3 should now be archived as v3
-      const history = vault.getHistory("KEY");
+      const history = await vault.getHistory("KEY");
       expect(history.length).toBe(3);
       expect(history[0].version).toBe(3); // archived v3 (was current)
       expect(history[1].version).toBe(2);
@@ -736,8 +736,8 @@ describe("Vault unit tests", () => {
       await vault.setSecret("KEY", "v2");
       await vault.setSecret("KEY", "v3");
 
-      vault.clearHistory("KEY");
-      const history = vault.getHistory("KEY");
+      await vault.clearHistory("KEY");
+      const history = await vault.getHistory("KEY");
 
       vault.close();
 
@@ -753,7 +753,7 @@ describe("Vault unit tests", () => {
         await vault.setSecret("KEY", `value-${i}`);
       }
 
-      const history = vault.getHistory("KEY");
+      const history = await vault.getHistory("KEY");
 
       vault.close();
 
@@ -770,7 +770,7 @@ describe("Vault unit tests", () => {
       await vault.setSecret("KEY", "v1", ["aws", "prod"]);
       await vault.setSecret("KEY", "v2", ["gcp"]);
 
-      const history = vault.getHistory("KEY");
+      const history = await vault.getHistory("KEY");
 
       vault.close();
 
@@ -788,7 +788,7 @@ describe("Vault unit tests", () => {
       const vault2 = new Vault(vaultPath);
       await vault2.unlock();
 
-      const history = vault2.getHistory("KEY");
+      const history = await vault2.getHistory("KEY");
       const archivedValue = await vault2.getHistoryVersion("KEY", 1);
       vault2.close();
 
