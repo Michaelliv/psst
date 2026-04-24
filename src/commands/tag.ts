@@ -23,27 +23,21 @@ export async function tag(
 
   const vault = await getUnlockedVault(options);
 
-  // Check if secret exists
-  const existing = vault.getTags(name);
-  if (existing.length === 0) {
-    // Could be no tags or secret doesn't exist - check by listing
-    const secrets = vault.listSecrets();
-    const exists = secrets.some((s) => s.name === name);
-    if (!exists) {
-      vault.close();
-      if (options.json) {
-        console.log(
-          JSON.stringify({ success: false, error: "not_found", name }),
-        );
-      } else if (!options.quiet) {
-        console.error(chalk.red("✗"), `Secret "${name}" not found`);
-      }
-      process.exit(EXIT_USER_ERROR);
+  // Cheap existence check — resolves to a single DescribeSecret on AWS,
+  // one indexed SQL lookup on sqlite. Avoids fetching / decrypting the
+  // secret value we don't need.
+  if (!(await vault.exists(name))) {
+    vault.close();
+    if (options.json) {
+      console.log(JSON.stringify({ success: false, error: "not_found", name }));
+    } else if (!options.quiet) {
+      console.error(chalk.red("✗"), `Secret "${name}" not found`);
     }
+    process.exit(EXIT_USER_ERROR);
   }
 
-  const success = vault.addTags(name, tagsToAdd);
-  const newTags = vault.getTags(name);
+  const success = await vault.addTags(name, tagsToAdd);
+  const newTags = await vault.getTags(name);
   vault.close();
 
   if (options.json) {
@@ -79,10 +73,9 @@ export async function untag(
 
   const vault = await getUnlockedVault(options);
 
-  // Check if secret exists
-  const secrets = vault.listSecrets();
-  const exists = secrets.some((s) => s.name === name);
-  if (!exists) {
+  // Existence check — uses vault.exists() (single DescribeSecret on AWS,
+  // one indexed lookup on sqlite) instead of loading the secret value.
+  if (!(await vault.exists(name))) {
     vault.close();
     if (options.json) {
       console.log(JSON.stringify({ success: false, error: "not_found", name }));
@@ -92,8 +85,8 @@ export async function untag(
     process.exit(EXIT_USER_ERROR);
   }
 
-  const success = vault.removeTags(name, tagsToRemove);
-  const newTags = vault.getTags(name);
+  const success = await vault.removeTags(name, tagsToRemove);
+  const newTags = await vault.getTags(name);
   vault.close();
 
   if (options.json) {

@@ -65,7 +65,7 @@ export async function exec(
 
   if (options.tags?.length && secretNames.length === 0) {
     // Tag-based selection: get all secrets with matching tags
-    const secretMetas = vault.listSecrets(options.tags);
+    const secretMetas = await vault.listSecrets(options.tags);
     for (const meta of secretMetas) {
       const value = await vault.getSecret(meta.name);
       if (value !== null) {

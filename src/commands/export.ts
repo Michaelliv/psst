@@ -10,7 +10,7 @@ export async function exportSecrets(
   options: ExportOptions = {},
 ): Promise<void> {
   const vault = await getUnlockedVault(options);
-  const secrets = vault.listSecrets();
+  const secrets = await vault.listSecrets();
 
   if (secrets.length === 0) {
     if (options.json) {
