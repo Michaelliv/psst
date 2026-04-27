@@ -130,7 +130,10 @@ async function ensureAwsSdk(options: OutputOptions): Promise<void> {
         }),
       );
     } else if (!options.quiet) {
-      console.error(chalk.red("\u2717"), "Failed to install AWS SDK automatically");
+      console.error(
+        chalk.red("\u2717"),
+        "Failed to install AWS SDK automatically",
+      );
       console.error(
         chalk.dim(
           "  Install manually: npm install -g @aws-sdk/client-secrets-manager @aws-sdk/credential-providers",

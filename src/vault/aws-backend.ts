@@ -184,9 +184,7 @@ export class AwsBackend implements VaultBackend {
    * Check whether an AWS secret exists AND has the psst:managed tag.
    * Returns null if not found, false if found but unmanaged, true if managed.
    */
-  private async isManagedSecret(
-    awsName: string,
-  ): Promise<boolean | null> {
+  private async isManagedSecret(awsName: string): Promise<boolean | null> {
     const { sdk, client } = await this.getClient();
     try {
       const resp: DescribeSecretCommandOutput = await client.send(

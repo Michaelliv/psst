@@ -660,9 +660,11 @@ describe("AwsBackend", () => {
   });
 
   describe("command injection and masking", () => {
-    async function withAwsVault(
-      fn: () => Promise<void>,
-    ): Promise<{ stdout: string; stderr: string; exitCode: number | undefined }> {
+    async function withAwsVault(fn: () => Promise<void>): Promise<{
+      stdout: string;
+      stderr: string;
+      exitCode: number | undefined;
+    }> {
       const testDir = join(
         tmpdir(),
         `psst-aws-command-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -759,7 +761,11 @@ describe("AwsBackend", () => {
       const result = await withAwsVault(() =>
         exec(
           [],
-          ["sh", "-c", "printf 'api=%s other=%s\\n' \"$API_KEY\" \"${OTHER_KEY:-missing}\""],
+          [
+            "sh",
+            "-c",
+            'printf \'api=%s other=%s\\n\' "$API_KEY" "${OTHER_KEY:-missing}"',
+          ],
           { tags: ["prod"] },
         ),
       );
@@ -777,7 +783,11 @@ describe("AwsBackend", () => {
 
       const result = await withAwsVault(() =>
         run(
-          ["sh", "-c", "printf 'api=%s other=%s\\n' \"$API_KEY\" \"${OTHER_KEY:-missing}\""],
+          [
+            "sh",
+            "-c",
+            'printf \'api=%s other=%s\\n\' "$API_KEY" "${OTHER_KEY:-missing}"',
+          ],
           { tags: ["prod"] },
         ),
       );

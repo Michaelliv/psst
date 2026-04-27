@@ -42,12 +42,13 @@
     "url": "https://github.com/Michaelliv/psst/issues"
   },
   "devDependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/credential-providers": "^3.600.0",
     "@biomejs/biome": "^2.3.14",
     "@types/better-sqlite3": "^7.6.13",
     "bun-types": "latest",
     "typescript": "^5.0.0"
   },
-
   "keywords": [
     "secrets",
     "cli",
@@ -71,7 +72,11 @@
     "@aws-sdk/credential-providers": "^3.600.0"
   },
   "peerDependenciesMeta": {
-    "@aws-sdk/client-secrets-manager": { "optional": true },
-    "@aws-sdk/credential-providers": { "optional": true }
+    "@aws-sdk/client-secrets-manager": {
+      "optional": true
+    },
+    "@aws-sdk/credential-providers": {
+      "optional": true
+    }
   }
 }
