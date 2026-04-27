@@ -6,6 +6,9 @@
  */
 
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // ─── Minimal in-memory AWS Secrets Manager fake ─────────────────────────────
 //
@@ -272,6 +275,8 @@ mock.module("@aws-sdk/client-secrets-manager", () => ({
 
 // ─── Actual tests ───────────────────────────────────────────────────────────
 
+import { exec } from "../commands/exec.js";
+import { run } from "../commands/run.js";
 import { AwsBackend } from "./aws-backend.js";
 
 describe("AwsBackend", () => {
@@ -651,6 +656,136 @@ describe("AwsBackend", () => {
         ],
       });
       expect(await b.getSecret("LEGACY")).toBe("just-a-raw-string");
+    });
+  });
+
+  describe("command injection and masking", () => {
+    async function withAwsVault(
+      fn: () => Promise<void>,
+    ): Promise<{ stdout: string; stderr: string; exitCode: number | undefined }> {
+      const testDir = join(
+        tmpdir(),
+        `psst-aws-command-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      mkdirSync(join(testDir, ".psst", "envs", "default"), { recursive: true });
+      writeFileSync(
+        join(testDir, ".psst", "envs", "default", "config.json"),
+        JSON.stringify({ backend: "aws", aws: { region: "us-east-1" } }),
+      );
+
+      const originalCwd = process.cwd();
+      const originalStdoutWrite = process.stdout.write;
+      const originalStderrWrite = process.stderr.write;
+      const originalExit = process.exit;
+      let stdout = "";
+      let stderr = "";
+      let exitCode: number | undefined;
+
+      process.chdir(testDir);
+      process.stdout.write = ((chunk: unknown) => {
+        stdout += String(chunk);
+        return true;
+      }) as typeof process.stdout.write;
+      process.stderr.write = ((chunk: unknown) => {
+        stderr += String(chunk);
+        return true;
+      }) as typeof process.stderr.write;
+      process.exit = ((code?: string | number | null) => {
+        exitCode = typeof code === "number" ? code : 0;
+        return undefined as never;
+      }) as typeof process.exit;
+
+      try {
+        await fn();
+        for (let i = 0; i < 100 && exitCode === undefined; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        return { stdout, stderr, exitCode };
+      } finally {
+        process.exit = originalExit;
+        process.stdout.write = originalStdoutWrite;
+        process.stderr.write = originalStderrWrite;
+        process.chdir(originalCwd);
+        rmSync(testDir, { recursive: true, force: true });
+      }
+    }
+
+    it("exec injects AWS secrets and masks stdout/stderr", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      await b.setSecret("API_KEY", "aws-secret-123");
+
+      const result = await withAwsVault(() =>
+        exec(
+          ["API_KEY"],
+          [
+            "sh",
+            "-c",
+            "printf 'stdout=%s\\n' \"$API_KEY\"; printf 'stderr=%s\\n' \"$API_KEY\" >&2",
+          ],
+        ),
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("stdout=[REDACTED]");
+      expect(result.stderr).toContain("stderr=[REDACTED]");
+      expect(result.stdout).not.toContain("aws-secret-123");
+      expect(result.stderr).not.toContain("aws-secret-123");
+    });
+
+    it("run injects all AWS secrets and masks stdout/stderr", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      await b.setSecret("API_KEY", "aws-secret-123");
+
+      const result = await withAwsVault(() =>
+        run([
+          "sh",
+          "-c",
+          "printf 'stdout=%s\\n' \"$API_KEY\"; printf 'stderr=%s\\n' \"$API_KEY\" >&2",
+        ]),
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("stdout=[REDACTED]");
+      expect(result.stderr).toContain("stderr=[REDACTED]");
+      expect(result.stdout).not.toContain("aws-secret-123");
+      expect(result.stderr).not.toContain("aws-secret-123");
+    });
+
+    it("tag-filtered exec injects AWS secrets and masks output", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      await b.setSecret("API_KEY", "aws-secret-123", ["prod"]);
+      await b.setSecret("OTHER_KEY", "other-secret-456", ["dev"]);
+
+      const result = await withAwsVault(() =>
+        exec(
+          [],
+          ["sh", "-c", "printf 'api=%s other=%s\\n' \"$API_KEY\" \"${OTHER_KEY:-missing}\""],
+          { tags: ["prod"] },
+        ),
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("api=[REDACTED] other=missing");
+      expect(result.stdout).not.toContain("aws-secret-123");
+      expect(result.stdout).not.toContain("other-secret-456");
+    });
+
+    it("tag-filtered run injects AWS secrets and masks output", async () => {
+      const b = new AwsBackend({ region: "us-east-1" });
+      await b.setSecret("API_KEY", "aws-secret-123", ["prod"]);
+      await b.setSecret("OTHER_KEY", "other-secret-456", ["dev"]);
+
+      const result = await withAwsVault(() =>
+        run(
+          ["sh", "-c", "printf 'api=%s other=%s\\n' \"$API_KEY\" \"${OTHER_KEY:-missing}\""],
+          { tags: ["prod"] },
+        ),
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("api=[REDACTED] other=missing");
+      expect(result.stdout).not.toContain("aws-secret-123");
+      expect(result.stdout).not.toContain("other-secret-456");
     });
   });
 });
