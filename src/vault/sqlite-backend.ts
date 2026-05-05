@@ -8,6 +8,7 @@
  */
 
 import { join } from "node:path";
+import { getenvNative } from "./native-env.js";
 import type {
   SecretHistoryRecord,
   SecretMetaRecord,
@@ -91,14 +92,27 @@ export class SqliteBackend implements VaultBackend {
   async unlock(): Promise<boolean> {
     if (this.key) return true;
 
-    const keychainResult = await getKey();
-    if (keychainResult.success && keychainResult.key) {
-      this.key = keyToBuffer(keychainResult.key);
+    const password = process.env.PSST_PASSWORD ?? getenvNative("PSST_PASSWORD");
+    const debug =
+      (process.env.PSST_DEBUG ?? getenvNative("PSST_DEBUG")) === "1";
+    if (debug) {
+      process.stderr.write(
+        `[psst debug] unlock: PSST_PASSWORD=${password ? `set(len=${password.length})` : "unset"}\n`,
+      );
+    }
+    if (password) {
+      this.key = keyToBuffer(password);
       return true;
     }
 
-    if (process.env.PSST_PASSWORD) {
-      this.key = keyToBuffer(process.env.PSST_PASSWORD);
+    const keychainResult = await getKey();
+    if (debug) {
+      process.stderr.write(
+        `[psst debug] unlock: keychain success=${keychainResult.success} error=${keychainResult.error ?? "none"}\n`,
+      );
+    }
+    if (keychainResult.success && keychainResult.key) {
+      this.key = keyToBuffer(keychainResult.key);
       return true;
     }
 
