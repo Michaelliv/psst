@@ -14,7 +14,7 @@
     }
   },
   "bin": {
-    "psst": "./src/main.ts"
+    "psst": "./dist/main.js"
   },
   "files": [
     "src",
@@ -46,6 +46,7 @@
     "@aws-sdk/credential-providers": "^3.600.0",
     "@biomejs/biome": "^2.3.14",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.1",
     "bun-types": "latest",
     "typescript": "^5.0.0"
   },

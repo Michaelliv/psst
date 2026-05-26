@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline";
 import type { OutputOptions } from "./output.js";
 
 /**
@@ -23,22 +24,15 @@ export async function readPassword(
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
 
   let input = "";
-  const reader = Bun.stdin.stream().getReader();
-
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = new TextDecoder().decode(value);
-      if (chunk.includes("\n") || chunk.includes("\r")) {
-        input += chunk.replace(/[\r\n]/g, "");
-        break;
-      }
-      input += chunk;
-    }
+    const rl = createInterface({ input: process.stdin, terminal: false });
+    input = await new Promise<string>((resolve) => {
+      rl.once("line", (line) => {
+        rl.close();
+        resolve(line);
+      });
+    });
   } finally {
-    reader.releaseLock();
     spawnSync("stty", ["echo"], { stdio: "inherit" });
     console.log();
   }
@@ -50,16 +44,11 @@ export async function readPassword(
  * Read all content from stdin
  */
 export async function readStdin(): Promise<string> {
-  const reader = Bun.stdin.stream().getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.from(chunk));
   }
-
-  return new TextDecoder().decode(Buffer.concat(chunks));
+  return Buffer.concat(chunks).toString("utf-8");
 }
 
 /**
@@ -76,22 +65,15 @@ export async function readSecretValue(prompt: string): Promise<string> {
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
 
   let input = "";
-  const reader = Bun.stdin.stream().getReader();
-
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = new TextDecoder().decode(value);
-      if (chunk.includes("\n") || chunk.includes("\r")) {
-        input += chunk.replace(/[\r\n]/g, "");
-        break;
-      }
-      input += chunk;
-    }
+    const rl = createInterface({ input: process.stdin, terminal: false });
+    input = await new Promise<string>((resolve) => {
+      rl.once("line", (line) => {
+        rl.close();
+        resolve(line);
+      });
+    });
   } finally {
-    reader.releaseLock();
     spawnSync("stty", ["echo"], { stdio: "inherit" });
     console.log();
   }

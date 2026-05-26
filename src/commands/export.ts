@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import chalk from "chalk";
 import type { OutputOptions } from "../utils/output.js";
 import { getUnlockedVault } from "./common.js";
@@ -37,7 +38,7 @@ export async function exportSecrets(
   const content = `${lines.join("\n")}\n`;
 
   if (options.envFile) {
-    await Bun.write(options.envFile, content);
+    await writeFile(options.envFile, content);
 
     if (options.json) {
       console.log(

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import chalk from "chalk";
 import { EXIT_USER_ERROR } from "../utils/exit-codes.js";
 import { readStdin } from "../utils/input.js";
@@ -53,7 +54,7 @@ export async function importSecrets(
       process.exit(EXIT_USER_ERROR);
     }
 
-    const content = await Bun.file(filePath).text();
+    const content = await readFile(filePath, "utf-8");
     entries = parseEnvContent(content);
   }
 
