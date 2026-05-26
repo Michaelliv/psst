@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import chalk from "chalk";
 import { EXIT_ERROR, EXIT_USER_ERROR } from "../utils/exit-codes.js";
@@ -219,16 +220,27 @@ function getFilesToScan(staged: boolean, scanPath?: string): string[] {
 
 function getFilesRecursive(dir: string): string[] {
   const files: string[] = [];
-  const _entries = Bun.file(dir);
 
-  // Use glob to get all files
-  const glob = new Bun.Glob("**/*");
-  for (const path of glob.scanSync({ cwd: dir, onlyFiles: true })) {
-    // Skip common non-text files and directories
-    if (shouldSkipFile(path)) continue;
-    files.push(join(dir, path));
+  function recurse(currentDir: string) {
+    let entries;
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry.name);
+      const relPath = relative(dir, fullPath);
+      if (shouldSkipFile(relPath)) continue;
+      if (entry.isDirectory()) {
+        recurse(fullPath);
+      } else if (entry.isFile()) {
+        files.push(fullPath);
+      }
+    }
   }
 
+  recurse(dir);
   return files;
 }
 
@@ -279,7 +291,7 @@ async function scanFiles(
       // Skip large files (> 1MB)
       if (stat.size > 1024 * 1024) continue;
 
-      const content = await Bun.file(file).text();
+      const content = await readFile(file, "utf-8");
 
       // Skip binary files (check for null bytes)
       if (content.includes("\0")) continue;
