@@ -29,6 +29,7 @@ import type {
 import {
   type AwsBackendConfig,
   type BackendType,
+  type KeyBackendType,
   loadConfig,
   saveConfig,
   type VaultConfig,
@@ -60,6 +61,8 @@ export interface VaultOptions {
   key?: string;
   /** Override the backend selection. Skips reading config.json. */
   backend?: BackendType;
+  /** Where the vault encryption key is stored. Default: "keychain". */
+  keyBackend?: KeyBackendType;
   /** AWS backend settings. Only used when backend === "aws". */
   aws?: AwsBackendConfig;
 }
@@ -76,20 +79,27 @@ export class Vault {
     // Resolve the backend choice and config.
     let backendType: BackendType;
     let awsConfig: AwsBackendConfig | undefined;
+    let keyBackend: KeyBackendType | undefined;
 
     if (options?.backend) {
       backendType = options.backend;
       awsConfig = options.aws;
+      keyBackend = options.keyBackend;
     } else {
       const fileConfig = this.tryLoadConfig();
       backendType = fileConfig?.backend ?? "sqlite";
       awsConfig = fileConfig?.aws ?? options?.aws;
+      keyBackend = fileConfig?.keyBackend ?? options?.keyBackend;
     }
 
     if (backendType === "aws") {
       this.backend = new AwsBackend(awsConfig);
     } else {
-      const sqlite = new SqliteBackend(vaultPath, { key: options?.key });
+      const sqlite = new SqliteBackend(vaultPath, {
+        key: options?.key,
+        keyBackend,
+        vaultPath,
+      });
       this.sqlite = sqlite;
       this.backend = sqlite;
     }
@@ -195,6 +205,8 @@ export class Vault {
     options?: {
       skipKeychain?: boolean;
       backend?: BackendType;
+      keyBackend?: KeyBackendType;
+      keystorePassword?: string;
       aws?: AwsBackendConfig;
     },
   ): Promise<{ success: boolean; error?: string }> {
@@ -215,14 +227,11 @@ export class Vault {
     // sqlite
     const result = await initializeSqliteVault(vaultPath, {
       skipKeychain: options?.skipKeychain,
+      keyBackend: options?.keyBackend,
+      keystorePassword: options?.keystorePassword,
     });
-    if (result.success) {
-      // Only write a config file if it doesn't already exist — keeps
-      // the default sqlite case as zero-config.
-      const configPath = join(vaultPath, CONFIG_FILE_NAME);
-      if (!existsSync(configPath)) {
-        // Intentionally skipped: default config is the absence of a file.
-      }
+    if (result.success && options?.keyBackend === "sqlite") {
+      saveConfig(vaultPath, { backend: "sqlite", keyBackend: "sqlite" });
     }
     return result;
   }

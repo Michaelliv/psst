@@ -15,6 +15,7 @@ import { run } from "./commands/run.js";
 import { scan } from "./commands/scan.js";
 import { set } from "./commands/set.js";
 import { tag, untag } from "./commands/tag.js";
+import { passwd } from "./commands/passwd.js";
 
 const HELP = `
 psst - AI-native secrets manager
@@ -25,6 +26,8 @@ VAULT MANAGEMENT
   psst init --env <name>                     Create vault for specific environment
   psst init --backend aws                    Create vault backed by AWS Secrets Manager
   psst init --backend aws --aws-region us-east-1 --aws-prefix psst/
+  psst init --key-backend sqlite             Use password-protected sqlite keystore (no OS keychain)
+  psst passwd                                Change sqlite keystore password (PSST_PASSWORD + PSST_NEW_PASSWORD)
   psst list envs                             List available environments
 
 SECRET MANAGEMENT
@@ -189,6 +192,11 @@ async function main() {
   switch (command) {
     case "init":
       await init(cleanArgs.slice(1), options);
+      break;
+
+    case "passwd":
+    case "change-password":
+      await passwd(options);
       break;
 
     case "set": {
