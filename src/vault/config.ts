@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { errorMessage } from "../utils/errors.js";
 
 export type BackendType = "sqlite" | "aws";
+export type KeyBackendType = "keychain" | "sqlite";
 
 export interface AwsBackendConfig {
   /** AWS region. If not set, falls back to AWS_REGION, then AWS_DEFAULT_REGION. */
@@ -32,6 +33,7 @@ export interface AwsBackendConfig {
 
 export interface VaultConfig {
   backend: BackendType;
+  keyBackend?: KeyBackendType;
   aws?: AwsBackendConfig;
 }
 
@@ -120,7 +122,14 @@ function normalizeConfig(raw: unknown, configPath: string): VaultConfig {
     );
   }
 
-  const result: VaultConfig = { backend };
+  const keyBackend = obj.keyBackend ?? undefined;
+  if (keyBackend !== undefined && keyBackend !== "keychain" && keyBackend !== "sqlite") {
+    throw new Error(
+      `Unknown keyBackend "${String(keyBackend)}" in ${configPath}. Expected "keychain" or "sqlite".`,
+    );
+  }
+
+  const result: VaultConfig = { backend, ...(keyBackend ? { keyBackend } : {}) };
 
   if (backend === "aws") {
     const rawAws = obj.aws ?? {};

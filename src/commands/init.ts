@@ -7,13 +7,28 @@ import chalk from "chalk";
 import { errorMessage } from "../utils/errors.js";
 import { EXIT_ERROR, EXIT_USER_ERROR } from "../utils/exit-codes.js";
 import type { OutputOptions } from "../utils/output.js";
-import type { AwsBackendConfig, BackendType } from "../vault/config.js";
+import type { AwsBackendConfig, BackendType, KeyBackendType } from "../vault/config.js";
 import { Vault } from "../vault/vault.js";
 
 const AWS_PKGS = [
   "@aws-sdk/client-secrets-manager",
   "@aws-sdk/credential-providers",
 ] as const;
+
+/**
+ * Parse `--key-backend <name>` from the CLI args. Accepts "keychain" (default)
+ * or "sqlite". Returns undefined if absent.
+ */
+function parseKeyBackendFlag(args: string[]): KeyBackendType | undefined {
+  const idx = args.indexOf("--key-backend");
+  if (idx === -1) return undefined;
+  const value = args[idx + 1];
+  if (!value || value.startsWith("-")) {
+    throw new Error("--key-backend requires a value (keychain or sqlite)");
+  }
+  if (value === "keychain" || value === "sqlite") return value;
+  throw new Error(`Unknown --key-backend "${value}". Supported: keychain, sqlite.`);
+}
 
 /**
  * Parse `--backend <name>` from the CLI args. Accepts "sqlite" (default)
@@ -169,8 +184,10 @@ export async function init(
   // Backend selection — default sqlite, opt into aws with --backend aws.
   // parseBackendFlag throws on an unknown value; surface that cleanly.
   let backend: BackendType;
+  let keyBackend: KeyBackendType | undefined;
   try {
     backend = parseBackendFlag(args) ?? "sqlite";
+    keyBackend = parseKeyBackendFlag(args);
   } catch (err) {
     const msg = errorMessage(err);
     if (options.json) {
@@ -235,8 +252,31 @@ export async function init(
     process.exit(EXIT_USER_ERROR);
   }
 
+  // For sqlite key backend, require PSST_PASSWORD (no credentials file)
+  let keystorePassword: string | undefined;
+  if (keyBackend === "sqlite") {
+    keystorePassword = process.env.PSST_PASSWORD;
+    if (!keystorePassword) {
+      if (options.json) {
+        console.log(
+          JSON.stringify({
+            success: false,
+            error: "missing_password",
+            message: "PSST_PASSWORD env var is required for --key-backend sqlite",
+          }),
+        );
+      } else if (!options.quiet) {
+        console.error(chalk.red("\u2717"), "PSST_PASSWORD env var is required for --key-backend sqlite");
+        console.log(chalk.dim("  Set it before running: export PSST_PASSWORD=your-secret"));
+      }
+      process.exit(EXIT_USER_ERROR);
+    }
+  }
+
   const result = await Vault.initializeVault(vaultPath, {
     backend,
+    keyBackend,
+    keystorePassword,
     aws: awsConfig,
   });
 
@@ -256,9 +296,10 @@ export async function init(
     }
 
     if (!options.quiet) {
+      const keyBackendLabel = keyBackend === "sqlite" ? ", key: sqlite" : "";
       console.log(
         chalk.green("\u2713"),
-        `${scope.charAt(0).toUpperCase() + scope.slice(1)} vault created for "${env}" (backend: ${backend})`,
+        `${scope.charAt(0).toUpperCase() + scope.slice(1)} vault created for "${env}" (backend: ${backend}${keyBackendLabel})`,
       );
       console.log(chalk.dim(`  ${vaultPath}`));
 
