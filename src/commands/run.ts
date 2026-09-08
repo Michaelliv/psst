@@ -87,6 +87,11 @@ export async function run(
     ? Array.from(secrets.values()).filter((v) => v.length > 0)
     : [];
 
+  // Always mask PSST_PASSWORD to prevent leakage via shell expansion
+  if (shouldMask && process.env.PSST_PASSWORD) {
+    secretValues.push(process.env.PSST_PASSWORD);
+  }
+
   // Expand $VAR and ${VAR} in args ourselves (safe, no shell involved)
   const expandedArgs = args.map((arg) => expandEnvVars(arg, env));
 
